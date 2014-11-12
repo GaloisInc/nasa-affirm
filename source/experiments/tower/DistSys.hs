@@ -25,7 +25,7 @@ module DistSys where
 import           Control.Monad
 import           Ivory.Compile.C.CmdlineFrontend
 import           Ivory.Language
-import qualified Ivory.OS.FreeRTOS.SearchDir as FreeRTOS
+--import qualified Ivory.OS.FreeRTOS.SearchDir as FreeRTOS
 import           Ivory.Tower
 
 --------------------------------------------------------------------------------
@@ -45,9 +45,31 @@ system = do
   per <- period (Microseconds 1000)
   -- Creat the 3 nodes, passing them the global clock and the channel
   -- input/ouputs.
-  node "nod0" per out2 in0
+
+--  node "nod0" per out2 in0
   node "nod1" per out0 in1
   node "nod2" per out1 in2
+
+  obs out0 out1
+
+
+obs ::  ChanOutput State
+     -> ChanOutput State
+     -> Tower p ()
+obs out0 out1 =
+  monitor "obs" go
+  where
+  go = do
+    -- Initialize local state
+    st0 <- state "obs_st0"
+    st1 <- state "obs_st1"
+    handler out0 "obs_handler0" $
+      callback $ \m -> store st0 =<< deref m
+    handler out1 "obs_handler1" $
+      callback $ \m -> store st1 =<< deref m
+
+-- observer s0 s1 s3 = monitor "observer" $ do
+--   handler s0 s1 s2 "observer_prop" $
 
 -- A node in the system.
 node :: String
@@ -55,11 +77,14 @@ node :: String
      -> ChanOutput State
      -> ChanInput State
      -> Tower p ()
-node name per rx tx = monitor name $ do
-  -- Initialize local state
-  st <- state (name ++ "_st")
-  updateState name st rx
-  sendMsg name per st tx
+node name per rx tx =
+  monitor name go
+  where
+  go = do
+    -- Initialize local state
+    st <- state (name ++ "_st")
+    updateState name st rx
+    sendMsg name per st tx
 
 -- How to update local state: Tak an incoming message, get the value, and
 -- increment by one.

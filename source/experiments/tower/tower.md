@@ -2,6 +2,23 @@
 % Lee Pike
 % Nov 2014
 
+# Concepts
+
+- System
+    - Set of channels and architecture
+    - Clocks
+- Monitor
+    - Local state
+    - A set of handlers
+- Handler
+    - Triggered by
+        - A clock event
+        - A channel event
+        - A hardware event
+    - Initiates a callback
+- Callback
+    - State-machine that implements behavior when the handler fires
+
 # 3-Node Distributed System
 
 - Three synchronous nodes
@@ -70,9 +87,9 @@ sendMsg name per st tx =
     callback $ \_ -> emit e (constRef st)
 ```
 
-# Current implementation
+# To do
 
-- Creates 3 handlers that run on top of an RTOS
-- (Actually part of a single task, since same clock rate)
-- We want three separate tasks
+- Add a fault model
+- Explore property specification (synchronous observers?)
+- Add POSIX backend for simulation
 

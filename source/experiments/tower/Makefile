@@ -3,13 +3,13 @@
 PWD=$(shell pwd)
 
 PACKAGES= \
-  $(PREFIX)/ivory \
-  $(PREFIX)/ivory-stdlib \
-  $(PREFIX)/ivory-serialize \
-  $(PREFIX)/ivory-opts \
-  $(PREFIX)/ivory-backend-c \
-  $(PWD)/tower/tower-freertos \
-  $(PWD)/tower/tower
+  $(PREFIX)/ivory/ivory/ \
+  $(PREFIX)/ivory/ivory-artifact/ \
+  $(PREFIX)/ivory/ivory-stdlib/ \
+  $(PREFIX)/ivory/ivory-serialize/ \
+  $(PREFIX)/ivory/ivory-opts/ \
+  $(PREFIX)/ivory/ivory-backend-c/ \
+  $(PREFIX)/tower/tower/
 
 all: build
 
