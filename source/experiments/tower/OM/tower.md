@@ -19,6 +19,12 @@
 - Callback
     - State-machine that implements behavior when the handler fires
 
+# What's New?
+
+- Like CPS, but a notion of clocks
+- Nodes may contain time and event-triggered behavior
+- Implementation allows code generation, formal model generation
+
 # 3-Node Distributed System
 
 - Three synchronous nodes
