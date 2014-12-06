@@ -7,6 +7,7 @@
 {-# LANGUAGE PostfixOperators #-}
 {-# LANGUAGE ConstraintKinds #-}
 
+--
 -- (c) Galois, Inc. 2014
 -- Lee Pike
 --
@@ -25,9 +26,10 @@ import           Tower.AADL
 
 --------------------------------------------------------------------------------
 
+-- The type of a period channel
 type Period = ChanOutput (Stored ITime)
-type State = Stored Uint32
 
+-- A bunch of type constraints.
 type Constraints v =
   ( IvoryEq v
   , IvoryZeroVal v
@@ -35,6 +37,125 @@ type Constraints v =
   , IvoryInit v
   , IvoryStore v
   )
+
+-- The general: broadcast a single message.
+general :: Constraints v
+       => v
+       -> Period
+       -> ChanInput (Stored v)
+       -> Monitor p ()
+general v per tx = do
+  handler per "general_broadcast" $ do
+    e <- emitter tx 1
+    -- Broadcast whatever message (v) is passed in.
+    callback $ const $ emitV e v
+
+--------------------------------------------------------------------------------
+-- lieutenant start
+
+lieutenants
+  :: Constraints v
+  => ChanOutput (Stored v)
+  -> Tower () ()
+lieutenants genRx = do
+  -- Replicate three channels.
+  chans <- replicateM 3 channel
+  let (txs, rxs) = unzip chans
+  -- Make each lieutenant.
+  let mkLieutenant i =
+        monitor ("lt" ++ show i) (lieutenant genRx tx rxs)
+        where
+          rxs = map snd chans
+          tx  = fst (chans !! i)
+  -- Construct each lieutenant.
+  mapM_ mkLieutenant [0..2]
+
+-- Compose the lieutenant from it's rounds.
+lieutenant
+  :: Constraints v
+  => ChanOutput (Stored v)
+  -- ^ General's channel
+  -> ChanInput (Stored v)
+  -- ^ Broadcast channel
+  -> [ChanOutput (Stored v)]
+  -- ^ All incoming channels from lieutenants
+  -> Monitor p ()
+lieutenant genTx tx rxs = do
+  rnd1 genTx tx
+  rnd2 rxs
+
+-- Round 1 handler for a lieutenant: get the value from the general then
+-- broadcast it to the other lieutenants.
+rnd1 :: Constraints v
+     => ChanOutput (Stored v)
+     -> ChanInput (Stored v)
+     -> Monitor p ()
+rnd1 genTx tx =
+  handler genTx "rnd1_handler" $ do
+    e <- emitter tx 1
+    callback $ \m -> do
+      m' <- deref m
+      -- Broadcast (emit) the message received from the General to all of the
+      -- lieutenants.
+      emitV e m'
+
+-- Round 2 handler for a lieutenant.
+rnd2 :: Constraints v
+     => [ChanOutput (Stored v)]
+     -> Monitor p ()
+rnd2 rxs = do
+  -- Local array to hold exchanged vals
+  arr    <- state "local_arr"
+  -- Counter for filling array
+  bufCnt <- state "bufCnt"
+  -- Final result
+  res    <- state "final_result"
+  mapM_ (rnd2Handler arr bufCnt res (length rxs)) (zip rxs [0..])
+
+-- Store incoming value for each lieutenant, do majority vote.
+rnd2Handler
+  :: Constraints v
+  => Ref s (Array 3 (Stored v))
+  -> Ref Global (Stored Sint32)
+  -> Ref Global (Stored v)
+  -> Int
+  -> (ChanOutput (Stored v), Integer)
+  -> Monitor p ()
+rnd2Handler arr bufCnt res len (rx, i) =
+  handler rx ("rnd2_handler_lieutenant_" ++ show i) $
+    callback $ \m -> do
+      bc <- deref bufCnt
+      -- If the buffer is full (buffer count as big as the array), then
+      ifte_ (bc >=? fromIntegral len)
+        (do -- Vote on the result.
+            v <- iVote arr
+            -- Store the result in local memory.
+            store res v
+        )
+        (do m' <- deref m
+            -- Store the incoming value into the local array.
+            store (arr ! fromInteger i) m'
+            -- Increment buffer count.
+            bufCnt += 1
+        )
+
+-- lieutenant end
+--------------------------------------------------------------------------------
+
+-- Compose the system
+system :: Tower () ()
+system = do
+  -- Make the general channel endpoints
+  (genTx, genRx) <- channel
+
+  -- Run the general every 1ms.
+  genPer <- period (1`ms`)
+
+  -- Make a message for the general to send ("42")
+  monitor "general" (general (42::Sint32) genPer genTx)
+
+  lieutenants genRx
+
 
 -- Fast majory vote over Ivory arrays.
 iVote :: ( ANat n
@@ -60,77 +181,7 @@ iVote arr = do
       ]
   return =<< deref cR
 
-general :: Constraints v
-       => v
-       -> Period
-       -> ChanInput (Stored v)
-       -> Monitor p ()
-general v per tx = do
-  handler per "broadcast" $ do
-    e <- emitter tx 1
-    callback $ const $ emitV e v
-
-rnd1 ::  Constraints v
-     => ChanOutput (Stored v)
-     -> ChanInput (Stored v)
-     -> Ref Global (Stored Uint32)
-     -> Monitor p ()
-rnd1 rx tx rnd =
-  handler rx "rnd1" $ do
-    e <- emitter tx 1
-    callback $ \m -> do m' <- deref m
-                        emitV e m'
-                        rnd += 1
-
-rnd2 :: Constraints v
-     => ChanOutput (Stored v)
-     -> ChanOutput (Stored v)
-     -> ChanOutput (Stored v)
-     -> Ref Global (Stored Uint32)
-     -> Monitor p ()
-rnd2 rx0 rx1 rx2 rnd = do
-  arr <- state "local_arr"
-  mapM_ (storeMsg arr rnd) (zip [rx0, rx1, rx2] [0..])
-
-storeMsg
-  :: Constraints v
-  => Ref s (Array 3 (Stored v))
-  -> Ref Global (Stored Uint32)
-  -> (ChanOutput (Stored v), Integer)
-  -> Monitor p ()
-storeMsg arr rnd (rx, i) = do
-  res <- state "result"
-  handler rx ("rnd" ++ show i) $
-    callback $ \m -> do
-      r <- deref rnd
-      when (r ==? 1) $ do
-        m' <- deref m
-        store (arr ! fromInteger i) m'
-        v <- iVote arr
-        store res v
-lieutenant
-  :: Constraints v
-  => ChanOutput (Stored v)
-  -> ChanInput (Stored v)
-  -> [ChanOutput (Stored v)]
-  -> Monitor p ()
-lieutenant gOut tx [r0Tx, r1Tx, r2Tx] = do
-  rnd <- stateInit "rnd" izero
-  rnd1 gOut tx rnd
-  rnd2 r0Tx r1Tx r2Tx rnd
-
-system :: Tower () ()
-system = do
-  (gIn, gOut) <- channel
-  ltChans <- replicateM 3 channel
-  -- Run sychronously at 1ms.
-  per <- period (1`ms`)
-  monitor "general" (general (42::Sint32) per gIn)
-
-  let mkLieutenant i = monitor ("lt" ++ show i) $
-        lieutenant gOut (fst (ltChans !! i)) (map snd ltChans)
-  mapM_ mkLieutenant [0..2]
-
+-- Generate the AADL
 main :: IO ()
 main = runCompileAADL opts system
   where
