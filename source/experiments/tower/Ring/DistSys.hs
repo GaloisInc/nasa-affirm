@@ -27,6 +27,7 @@ import           Ivory.Compile.C.CmdlineFrontend
 import           Ivory.Language
 --import qualified Ivory.OS.FreeRTOS.SearchDir as FreeRTOS
 import           Ivory.Tower
+import           Text.Show.Pretty
 
 --------------------------------------------------------------------------------
 
@@ -35,7 +36,7 @@ data TestPlatform
 type Period = ChanOutput (Stored ITime)
 type State = Stored Uint32
 
-system :: Tower TestPlatform ()
+system :: Tower e ()
 system = do
   -- Make the three channels.
   (in0, out0) <- channel
@@ -46,30 +47,9 @@ system = do
   -- Creat the 3 nodes, passing them the global clock and the channel
   -- input/ouputs.
 
---  node "nod0" per out2 in0
+  node "nod0" per out2 in0
   node "nod1" per out0 in1
   node "nod2" per out1 in2
-
-  obs out0 out1
-
-
-obs ::  ChanOutput State
-     -> ChanOutput State
-     -> Tower p ()
-obs out0 out1 =
-  monitor "obs" go
-  where
-  go = do
-    -- Initialize local state
-    st0 <- state "obs_st0"
-    st1 <- state "obs_st1"
-    handler out0 "obs_handler0" $
-      callback $ \m -> store st0 =<< deref m
-    handler out1 "obs_handler1" $
-      callback $ \m -> store st1 =<< deref m
-
--- observer s0 s1 s3 = monitor "observer" $ do
---   handler s0 s1 s2 "observer_prop" $
 
 -- A node in the system.
 node :: String
@@ -94,13 +74,8 @@ updateState :: String
             -> Monitor p ()
 updateState name st rx =
   handler rx (name ++ "_recv_msg") $
-    callback $ \m -> call_ update m st
-
-[ivory|
-void update(const * State m, * State st) {
-   store st as *m+1;
-}
-|]
+    callback $ \m -> do v <- deref m
+                        store st (v + 1)
 
 sendMsg :: String
         -> ChanOutput (Stored ITime)
@@ -115,9 +90,11 @@ sendMsg name per st tx =
 
 main :: IO ()
 main = do
-  void (runCompilerWith Nothing searchpath code compileropts)
-  where
-  dir = "distsystest"
-  (_ast, code) = tower system
-  searchpath = Just [FreeRTOS.searchDir]
-  compileropts = initialOpts { srcDir = dir, includeDir = dir }
+  let (ast, code) = runTower system ()
+  putStrLn (ppShow ast)
+  putStrLn (ppShow code)
+  -- void (runCompilerWith Nothing "" code initialOpts)
+  -- print (ppShow ast)
+  -- where
+  -- dir = "distsystest"
+--  compileropts = initialOpts { srcDir = dir, includeDir = dir }
