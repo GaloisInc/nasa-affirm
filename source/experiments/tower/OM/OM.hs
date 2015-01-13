@@ -16,7 +16,7 @@
 
 --------------------------------------------------------------------------------
 
-module OM where
+module Main where
 
 import           Control.Monad hiding (when)
 import           Ivory.Language
@@ -147,13 +147,11 @@ system :: Tower () ()
 system = do
   -- Make the general channel endpoints
   (genTx, genRx) <- channel
-
   -- Run the general every 1ms.
   genPer <- period (1`ms`)
-
   -- Make a message for the general to send ("42")
   monitor "general" (general (42::Sint32) genPer genTx)
-
+  -- Make the lieutenants
   lieutenants genRx
 
 

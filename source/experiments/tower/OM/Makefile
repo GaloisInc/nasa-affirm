@@ -12,11 +12,10 @@ PACKAGES= \
   $(PREFIX)/tower/tower/ \
   $(PREFIX)/tower/tower-aadl/
 
-all: build
+all: run
 
-.PHONY: build
-build:
-	cabal build
+run: add-srcs
+	cabal exec runghc OM.hs
 
 .PHONY: add-srcs
 add-srcs:
@@ -24,8 +23,12 @@ add-srcs:
 	cabal sandbox add-source $(PACKAGES)
 	cabal install $(PACKAGES)
 
+.PHONY: clean
+clean:
+	-rm -rf AADL
+
 .PHONY: veryclean
-veryclean:
+veryclean: clean
 	-rm -rf dist
 	-rm -rf .cabal-sandbox
-	-rm -rf cabal.sandbox.confg
+	-rm -rf cabal.sandbox.config
