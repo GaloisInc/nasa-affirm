@@ -49,9 +49,11 @@ code > span.er { color: #c3bf9f; }
     <div class="slides">
 
 
-<section id="affirm-progress-feb.-2015" class="slide level1">
-<h1>AFFIRM Progress Feb. 2015</h1>
-<p>Topics:</p>
+<section id="affirm-feb-2015" class="slide level1">
+<h1>AFFIRM Feb 2015</h1>
+</section>
+<section id="topics" class="slide level1">
+<h1>Topics</h1>
 <ul>
 <li>Recall Tower</li>
 <li>Example Tower AST vs. SAL AST</li>
@@ -60,22 +62,52 @@ code > span.er { color: #c3bf9f; }
 <li>Concrete Steps</li>
 </ul>
 </section>
-<section id="recall-tower-language" class="slide level1">
-<h1>Recall Tower Language</h1>
+<section id="tower-language" class="slide level1">
+<h1>Tower Language</h1>
 <pre class="sourceCode haskell"><code class="sourceCode haskell">(in0, out0) <span class="ot">&lt;-</span> channel      <span class="co">-- out0 is rx for &quot;A&quot;</span>
 (in1, out1) <span class="ot">&lt;-</span> channel      <span class="co">-- in1  is tx for &quot;A&quot;</span>
-clk <span class="ot">&lt;-</span> period (<span class="dt">Microseconds</span> <span class="dv">1000</span>)
+clk         <span class="ot">&lt;-</span> period (<span class="dt">Microseconds</span> <span class="dv">1000</span>)
 
 monitor <span class="st">&quot;A&quot;</span> <span class="fu">$</span> <span class="kw">do</span>
 
   st <span class="ot">&lt;-</span> state <span class="st">&quot;A_st&quot;</span>        <span class="co">-- state reference</span>
+  store st <span class="dv">0</span>
 
   handler out0 <span class="st">&quot;recv&quot;</span> <span class="fu">$</span> <span class="kw">do</span>  <span class="co">-- update state upon recv</span>
-    callback (\m <span class="ot">-&gt;</span> call_ update m st)
+    callback (\m <span class="ot">-&gt;</span> update m st)
 
-  handler clk <span class="st">&quot;send&quot;</span>  <span class="fu">$</span> <span class="kw">do</span>  <span class="co">-- send msg on clock</span>
+  handler clk <span class="st">&quot;send&quot;</span>  <span class="fu">$</span> <span class="kw">do</span>  <span class="co">-- send current state on clock</span>
     e <span class="ot">&lt;-</span> emitter in1 <span class="dv">1</span>
     callback (\_ <span class="ot">-&gt;</span> emit e (constRef st))</code></pre>
+<h2 id="state-transition">State transition</h2>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="co">-- update &#39;st&#39; by adding &#39;m&#39; to it</span>
+update m st <span class="fu">=</span> <span class="kw">do</span>
+  m&#39; <span class="ot">&lt;-</span> deref m
+  st&#39; <span class="ot">&lt;-</span> deref st
+  store st (st&#39; <span class="fu">+</span> m&#39;)</code></pre>
+</section>
+<section id="sal-model" class="slide level1">
+<h1>SAL Model</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">monitorA<span class="fu">:</span> <span class="dt">MODULE</span> <span class="fu">=</span>
+  <span class="dt">INPUT</span>  recv    <span class="fu">:</span> <span class="dt">BOOLEAN</span>  <span class="co">-- new msg?</span>
+  <span class="dt">INPUT</span>  out0    <span class="fu">:</span> <span class="dt">INTEGER</span>  <span class="co">-- msg</span>
+  <span class="dt">INPUT</span>  clk     <span class="fu">:</span> <span class="dt">CLOCK</span>    <span class="co">-- { low, pos_edge, high, neg_edge }</span>
+  <span class="dt">OUTPUT</span> in1     <span class="fu">:</span> <span class="dt">INTEGER</span>
+  <span class="dt">LOCAL</span>  state   <span class="fu">:</span> <span class="dt">INTEGER</span>
+  <span class="dt">INITIALIZATION</span>
+    state <span class="fu">=</span> <span class="dv">0</span>
+  <span class="co">{- TRANSITION ... -}</span>
+<span class="dt">END</span></code></pre>
+<h2 id="transition">Transition</h2>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">TRANSITION</span>                <span class="co">-- async composition of the handlers</span>
+  [
+    clk <span class="fu">=</span> pos_edge      <span class="fu">--&gt;</span> in1&#39; <span class="fu">=</span> state
+  []
+    recv <span class="dt">AND</span> out0 <span class="fu">&gt;=</span> <span class="dv">0</span>  <span class="fu">--&gt;</span> state&#39; <span class="fu">=</span> state <span class="fu">+</span> out0;
+                            recv&#39; <span class="fu">=</span> <span class="dt">FALSE</span>
+  []
+    <span class="dt">ELSE</span>                <span class="fu">--&gt;</span>
+  ]</code></pre>
 </section>
     </div>
   </div>
