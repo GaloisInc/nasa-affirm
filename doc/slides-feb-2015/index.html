@@ -44,19 +44,24 @@ Lee Pike<br/>Benjamin Jones<br/>Galois Inc.
   </p>
   <p class="date">February 11, 2015</p>
 </div>
-<div id="progress" class="slide section level1">
-<h1>Progress</h1>
+<div id="tower-to-sal" class="slide section level1">
+<h1>Tower to SAL</h1>
+<p>Ideas on generating logical specifications (SAL) from an architectural DSL (Tower)</p>
+<p><em>Premise:</em> We want to generate models of a system that is specified in our DSL using abstractions appropriate to the domain of fault tolerant distributed systems.</p>
+</div>
+<div id="example" class="slide section level1">
+<h1>Example</h1>
+<p>Consider a toy example system:</p>
 <ul>
-<li>Tower AST</li>
-<li>Example Tower Code vs. SAL Model</li>
-<li>Require/Ensure annotations</li>
-<li>Example SAL Model</li>
-<li>Concrete Steps</li>
+<li>one node labeled &quot;A&quot;</li>
+<li>A's state consists of one integer variable</li>
+<li>a typed input channel to A, &quot;rx&quot;, carrying integers</li>
+<li>A updates its state by adding each received integer to it</li>
 </ul>
 </div>
-<div id="tower-language" class="slide section level1">
-<h1>Tower Language</h1>
-<p>Tower code for a process that updates its state upon receiving messages.</p>
+<div id="toy-example-specified-in-tower" class="slide section level1">
+<h1>Toy Example Specified in Tower</h1>
+<p>The node A is represented by a monitor that contains a handler listening to the input channel. The handler calls an <code>update</code> function upon receiving a message.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell">monitor <span class="st">&quot;A&quot;</span> <span class="fu">$</span> <span class="kw">do</span>
 
   st <span class="ot">&lt;-</span> state <span class="st">&quot;st&quot;</span>  <span class="co">-- local state</span>
@@ -65,17 +70,28 @@ Lee Pike<br/>Benjamin Jones<br/>Galois Inc.
   handler rx <span class="st">&quot;rx&quot;</span> <span class="fu">$</span> <span class="kw">do</span>  <span class="co">-- handle channel &quot;rx&quot;</span>
     callback (\m <span class="ot">-&gt;</span> update m st)</code></pre>
 </div>
-<div id="state-transition" class="slide section level1">
-<h1>State transition</h1>
-<p>Add received integer to the state.</p>
+<div id="toy-example-continued.." class="slide section level1">
+<h1>Toy Example (continued..)</h1>
+<p>The update function specifies the details of A's state transition.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell">update m st <span class="fu">=</span> <span class="kw">do</span>
-  m&#39; <span class="ot">&lt;-</span> deref m
-  st&#39; <span class="ot">&lt;-</span> deref st
-  store st (st&#39; <span class="fu">+</span> m&#39;)</code></pre>
+  m&#39; <span class="ot">&lt;-</span> deref m        <span class="co">-- dereference msg</span>
+  st&#39; <span class="ot">&lt;-</span> deref st      <span class="co">-- dereference current state</span>
+  store st (st&#39; <span class="fu">+</span> m&#39;)  <span class="co">-- add msg to state and store result</span></code></pre>
 </div>
 <div id="sal-model" class="slide section level1">
 <h1>SAL Model</h1>
-<p>A corresponding SAL specification:</p>
+<p>To generate a SAL model from the Tower code:</p>
+<ul>
+<li>generate a SAL MODULE for each monitor node</li>
+<li>map monitor state variables to SAL module LOCAL variables</li>
+<li>map channel inputs, clocks, and signals to module INPUTs</li>
+<li>map channel outputs to module OUTPUTs</li>
+<li>generate a TRANSITION from the asynchronous composition of the handlers</li>
+</ul>
+</div>
+<div id="toy-example-in-sal" class="slide section level1">
+<h1>Toy Example in SAL</h1>
+<p>SAL module definition is straightforward. The <code>new?</code> input is added in order to model message received events.</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell">monitorA<span class="fu">:</span> <span class="dt">MODULE</span> <span class="fu">=</span>
   <span class="dt">INPUT</span>  new<span class="fu">?</span> <span class="fu">:</span> <span class="dt">BOOLEAN</span>
   <span class="dt">INPUT</span>  rx   <span class="fu">:</span> <span class="dt">INTEGER</span>
@@ -85,7 +101,7 @@ Lee Pike<br/>Benjamin Jones<br/>Galois Inc.
   <span class="co">{- TRANSITION ... -}</span>
 <span class="dt">END</span></code></pre>
 </div>
-<div id="state-transition-1" class="slide section level1">
+<div id="state-transition" class="slide section level1">
 <h1>State Transition</h1>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">TRANSITION</span>
   [
@@ -98,9 +114,10 @@ Lee Pike<br/>Benjamin Jones<br/>Galois Inc.
 <div id="update-abstracted" class="slide section level1">
 <h1>Update Abstracted</h1>
 <p>Programmer annotates the state machines:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell">requires (m <span class="fu">&gt;=</span> <span class="dv">0</span>) <span class="fu">$</span>
-  ensures (st&#39; <span class="fu">&gt;=</span> st) <span class="fu">$</span>
-    update m st <span class="fu">=</span> <span class="co">{- ... -}</span></code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">callback <span class="fu">$</span> \m <span class="ot">-&gt;</span>
+  requires (<span class="dv">0</span> <span class="fu">&lt;=?</span> <span class="dv">0</span>) <span class="fu">$</span>
+  ensures (\r <span class="ot">-&gt;</span> st <span class="fu">&lt;=?</span> r) <span class="fu">$</span>
+    update m st <span class="fu">=</span> <span class="co">{- original update code -}</span></code></pre>
 </div>
 <div id="sal-transition-abstracted" class="slide section level1">
 <h1>SAL Transition Abstracted</h1>
@@ -110,8 +127,21 @@ Lee Pike<br/>Benjamin Jones<br/>Galois Inc.
          <span class="fu">--&gt;</span> st&#39; <span class="dt">IN</span> { x <span class="fu">:</span> <span class="dt">INTEGER</span> <span class="fu">|</span> x <span class="fu">&gt;=</span> st };
              new<span class="fu">?</span><span class="ch">&#39; = FALSE</span>
   []
+    new<span class="fu">?</span> <span class="dt">AND</span> rx <span class="fu">&lt;</span> <span class="dv">0</span>
+         <span class="fu">--&gt;</span> st&#39; <span class="dt">IN</span> <span class="dt">INTEGER</span>;  <span class="co">-- undefined behavior?</span>
+  []
     <span class="dt">ELSE</span> <span class="fu">--&gt;</span>
   ]</code></pre>
+</div>
+<div id="concrete-steps" class="slide section level1">
+<h1>Concrete Steps</h1>
+<p>Short-term plans for implementing the ideas we've presented:</p>
+<ul>
+<li><em>Implement SAL syntax in Haskell</em> and an embedded language of constructors and combinators for generating native SAL syntax <a href="https://github.com/benjaminfjones/sal-lang" class="uri">https://github.com/benjaminfjones/sal-lang</a></li>
+<li><em>Map Tower to SAL</em> using the requires/ensures framework to abstract state machine details</li>
+<li>Explore using <em>fault annotations</em> on channels</li>
+<li>Explore using the <em>synchronous observer model</em> for specifying system properties</li>
+</ul>
 </div>
 </body>
 </html>
