@@ -1,3 +1,6 @@
+.PHONY: all
+all: html pdf
+
 index.html: tower-to-sal.md
 	pandoc -t slidy -f markdown -s $< -o $@
 
@@ -5,7 +8,9 @@ index.html: tower-to-sal.md
 html: index.html
 
 tower-to-sal.pdf: tower-to-sal.md
-	pandoc -t beamer -f markdown $< -o $@
+	pandoc -t beamer -f markdown \
+		--highlight-style=tango \
+		$< -o $@
 
 .PHONY: pdf
 pdf: tower-to-sal.pdf
