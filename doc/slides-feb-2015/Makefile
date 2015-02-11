@@ -5,7 +5,7 @@ index.html: tower-to-sal.md
 html: index.html
 
 tower-to-sal.pdf: tower-to-sal.md
-	pandoc -t beamer -V theme:Warsaw -f markdown $< -o $@
+	pandoc -t beamer -f markdown $< -o $@
 
 .PHONY: pdf
 pdf: tower-to-sal.pdf

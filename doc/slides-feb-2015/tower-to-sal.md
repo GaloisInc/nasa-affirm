@@ -5,11 +5,12 @@
 Tower to SAL
 ============
 
-Ideas on generating logical specifications (SAL) from an architectural DSL
-(Tower)
+Generating logical specifications from an architectural DSL
+-----------------------------------------------------------
 
-*Premise:* We want to generate models of a system that is specified in our DSL
-using abstractions appropriate to the domain of fault tolerant distributed systems.
+*Premise:* We want to generate (**SAL**) models of a system that is specified in
+our DSL (**Tower**) using abstractions appropriate to the domain of fault tolerant
+distributed systems.
 
 
 Example
@@ -19,8 +20,8 @@ Consider a toy example system:
 
   * one node labeled "A"
   * A's state consists of one integer variable
-  * a typed input channel to A, "rx", carrying integers
-  * A updates its state by adding each received integer to it
+  * there is a typed input channel to A, "rx", carrying integers
+  * A updates its state integer by adding each received integer to it
 
 
 Toy Example Specified in Tower
@@ -44,13 +45,13 @@ monitor "A" $ do
 Toy Example (continued..)
 =========================
 
-The update function specifies the details of A's state transition.
+The update function specifies the low-level details of A's state transition.
 
 ```haskell
 update m st = do
-  m' <- deref m        -- dereference msg
-  st' <- deref st      -- dereference current state
-  store st (st' + m')  -- add msg to state and store result
+  m' <- deref m        -- get msg
+  st' <- deref st      -- get current state
+  store st (st' + m')  -- add msg to state and store
 ```
 
 
@@ -69,14 +70,14 @@ To generate a SAL model from the Tower code:
 Toy Example in SAL
 ==================
 
-SAL module definition is straightforward. The `new?` input is added in order
-to model message received events.
+SAL module definition is straightforward. The variables `time` and
+`cal` are used to model message passing in a real-time system.
 
 ```haskell
-monitorA: MODULE =
-  INPUT  new? : BOOLEAN
-  INPUT  rx   : INTEGER
-  LOCAL  st   : INTEGER
+monitor[i : IDENTITY]: MODULE =
+  INPUT  time : TIME      -- current time
+  GLOBAL cal  : CALENDAR  -- event calendar
+  LOCAL  st   : INTEGER   -- local state
   INITIALIZATION
     st = 0
   {- TRANSITION ... -}
@@ -87,25 +88,43 @@ END
 State Transition
 ================
 
+The elided calendar functions tell a node when a new message has arrived.
+
 ```haskell
 TRANSITION
   [
-    new? --> st' = st + rx;
-             new?' = FALSE
+    pending?(cal, i) AND time = event_time(cal, i) -->
+      st' = st + get_msg(cal, i);
+      cal' = consume_msg(cal, i)
   []
     ELSE -->
   ]
 ```
 
 
-Update Abstracted
-=================
+Abstraction
+===========
 
-Programmer annotates the state machines:
+The SAL module above attempts to model our toy example faithfully, including
+all the details of the state machine at each node.
+
+...
+
+However, we may want to reason about the system at a different level of
+abstraction.
+
+
+Update Function Abstracted
+==========================
+
+We can use and extend the "requires / ensures" framework from Ivory in order
+to generate _abstract_ transition systems in our SAL model.
+
+In **Tower**:
 
 ```haskell
 callback $ \m ->
-  requires (0 <=? 0) $
+  requires (0 <=? m) $
   ensures (\r -> st <=? r) $
     update m st = {- original update code -}
 ```
@@ -114,15 +133,18 @@ callback $ \m ->
 SAL Transition Abstracted
 =========================
 
+In the _abstract_ transition, the new state value is drawn from the set of
+possible new states according to our `ensures` annotation.
+
 ```haskell
 TRANSITION
   [
-    new? AND rx >= 0
-         --> st' IN { x : INTEGER | x >= st };
-             new?' = FALSE
-  []
-    new? AND rx < 0
-         --> st' IN INTEGER;  -- undefined behavior?
+    pending?(cal, i) AND time = event_time(cal, i) -->
+      IF get_msg(cal, i) >= 0
+        THEN st' IN { x : INTEGER | st <= x }
+        ELSE signal(cal, i, time, undefined_behavior)
+      ENDIF
+      cal' = consume_msg(cal, i)
   []
     ELSE -->
   ]
@@ -134,12 +156,12 @@ Concrete Steps
 
 Short-term plans for implementing the ideas we've presented:
 
-  * _Implement SAL syntax in Haskell_ and an embedded language of constructors
+  * **Implement SAL syntax in Haskell** and an embedded language of constructors
     and combinators for generating native SAL syntax
     <https://github.com/benjaminfjones/sal-lang>
-  * _Map Tower to SAL_ using the requires/ensures framework to abstract
+  * **Map Tower to SAL** using the requires/ensures framework to abstract
     state machine details
-  * Explore using _fault annotations_ on channels
-  * Explore using the _synchronous observer model_ for specifying system
+  * Explore using **fault annotations** on channels
+  * Explore using the **synchronous observer model** for specifying system
     properties
 
