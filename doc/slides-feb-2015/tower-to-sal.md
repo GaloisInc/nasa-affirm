@@ -158,7 +158,7 @@ Short-term plans for implementing the ideas we've presented:
 
   * **Implement SAL syntax in Haskell** and an embedded language of constructors
     and combinators for generating native SAL syntax
-    <https://github.com/benjaminfjones/sal-lang>
+    <https://github.com/benjaminfjones/language-sal>
   * **Map Tower to SAL** using the requires/ensures framework to abstract
     state machine details
   * Explore using **fault annotations** on channels
