@@ -1,0 +1,214 @@
+%
+% SAL model of OM(1), LTL formulas and a synchronous observer module are
+% provided for verifying validity and agreement.
+%
+% Author: John Rushby, Computer Science Laboratory, SRI International (2004)
+% Modified: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
+%
+om1: CONTEXT =
+BEGIN
+
+stage: TYPE = [1..5];
+
+n: NATURAL = 3;
+k: NATURAL = 2;
+
+relays: TYPE = [1..n];
+receivers: TYPE = [1..k];
+
+vals: TYPE = [0..n+1];
+missing_v: vals = 0;
+correct_v: vals = n+1;
+
+faults: TYPE = {arbitrary, symmetric, manifest, none};
+
+controller: MODULE =
+BEGIN
+OUTPUT
+  pc: stage,
+  sf: faults,
+  rf: ARRAY relays OF faults
+INITIALIZATION
+  pc = 1;
+  sf IN {v: faults | TRUE};
+  rf IN {a: ARRAY relays OF faults |
+      FORALL (i:relays):
+        IF sf = arbitrary
+          THEN a[i] /= arbitrary
+          ELSE TRUE
+        ENDIF };
+TRANSITION
+[
+  pc <= 4 --> pc' = pc+1
+[]
+  ELSE -->
+]
+END;
+
+rvec: TYPE = ARRAY relays OF vals;
+vvec: TYPE = ARRAY receivers OF vals;
+
+source: MODULE =
+BEGIN
+OUTPUT
+  s_out: rvec
+INPUT
+  pc: stage,
+  sf: faults
+TRANSITION
+[
+  pc = 1 AND (sf = none OR sf = symmetric) -->
+    s_out' = [[i:relays] correct_v]
+[]
+  pc = 1 AND sf = manifest -->
+    s_out' = [[i:relays] missing_v]
+[]
+  pc = 1 AND sf = arbitrary -->
+    s_out' IN {a: rvec | TRUE}
+[]
+  ELSE -->
+]
+END;
+
+relay[i: relays]: MODULE =
+BEGIN
+INPUT
+  pc: stage,
+  r_in: vals,
+  rf:  faults
+OUTPUT
+  r_out: vvec
+TRANSITION
+[
+  pc = 2 AND rf = none -->
+    r_out' = [[p:receivers] r_in]
+[]
+  pc = 2 AND rf = manifest -->
+    r_out' = [[p:receivers] missing_v]
+[]
+  ([] (x:vals): pc = 2 AND rf = symmetric -->
+    r_out' = [[p:receivers] x])
+[]
+  pc = 2 AND rf = arbitrary -->
+    r_out' IN {a: vvec | TRUE}
+[]
+  ELSE -->
+]
+END;
+
+all: TYPE = [0..n];
+
+count_h(a: rvec, v: vals, acc: all, i: relays): all =
+   LET this_one: [0..1] = IF a[i]=v THEN 1 ELSE 0 ENDIF IN
+   IF i=1 THEN acc + this_one
+     ELSE count_h(a, v, acc + this_one, i-1)
+   ENDIF;
+
+count(a: rvec, v: vals): all = count_h(a, v, 0, n);
+
+receiver[p:receivers]: MODULE =
+BEGIN
+INPUT
+  vecs: ARRAY relays OF vvec,
+  pc: stage
+LOCAL
+  inv: rvec
+OUTPUT
+  vote: vals
+DEFINITION
+  inv = [[i:relays] vecs[i][p]]
+TRANSITION
+[
+  % ([] (i: vals):
+  %  pc = 3 AND 2*count(inv, i) > n --> vote' = i)
+
+  % Comment out the two lines above and uncomment the three lines below
+  % to switch to a hybrid majority vote
+
+  ([] (i: [1..n+1]):
+     pc = 3 AND
+       2*count(inv, i) > n - count(inv, missing_v) --> vote' = i)
+[]
+  ELSE --> vote' = missing_v
+]
+END;
+
+system: MODULE =
+   controller
+     || source
+     || (WITH OUTPUT vecs: ARRAY relays OF vvec
+         WITH INPUT s_out: rvec
+         WITH INPUT rf: ARRAY relays OF faults
+           (|| (i:relays): RENAME r_in TO s_out[i],
+                                  r_out TO vecs[i],
+                                  rf TO rf[i]
+                           IN relay[i]))
+     || (WITH OUTPUT votes: vvec
+           (|| (x:receivers):  RENAME vote TO votes[x]
+                               IN receiver[x]));
+
+live_0: THEOREM system |- F(pc=4);
+live_1: THEOREM system |- G(F(pc=5));
+live_2: THEOREM system |- F(G(pc=5));
+
+fc: TYPE = [0..3*(n+1)];
+
+fcount_h(a: ARRAY relays OF faults, acc: all, i: relays,
+        weights: [faults -> [0..3]]): fc =
+  IF i=1 THEN acc + weights(a[i])
+    ELSE fcount_h(a, acc + weights(a[i]), i-1, weights)
+  ENDIF;
+
+fcount(a: ARRAY relays OF faults, s: faults,
+       weights: [faults ->[0..3]]): fc =
+  fcount_h(a, weights(s), n, weights);
+
+wts(x: faults): [0..3] =
+  IF x=arbitrary THEN 3
+     ELSIF x=symmetric THEN 2
+     ELSIF x=manifest THEN 1
+     ELSE 0
+   ENDIF;
+
+validity: THEOREM system |-
+  G(pc=4 AND sf=none AND fcount(rf, sf, wts) < n =>
+    FORALL (x:receivers): votes[x]=correct_v);
+
+agreement: THEOREM system |-
+  G(pc=4 AND fcount(rf, sf, wts) < n =>
+    FORALL (x,y:receivers): votes[x]=votes[y]);
+
+%
+% Alternative to specifying THEOREMs using LTL is the
+% synchronous observer for 'validity' and 'agreement'
+%
+observer: MODULE =
+BEGIN
+  INPUT
+    pc    : INTEGER,
+    sf    : faults,
+    rf    : ARRAY relays OF faults,
+    votes : vvec
+  OUTPUT
+    ok : BOOLEAN
+  INITIALIZATION
+    ok = TRUE
+  TRANSITION
+  [
+    no_validity:
+      NOT (pc=4 AND sf=none AND fcount(rf, sf, wts) < n =>
+           FORALL (x:receivers): votes[x]=correct_v)
+      --> ok' = FALSE
+  []
+    no_agreement:
+      NOT (pc=4 AND fcount(rf, sf, wts) < n =>
+           FORALL (x,y:receivers): votes[x]=votes[y])
+      --> ok' = FALSE
+  []
+    ELSE -->
+  ]
+END;
+
+observed_vaa: THEOREM (system || observer) |- G(ok);
+
+END
