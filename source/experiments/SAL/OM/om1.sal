@@ -10,8 +10,8 @@ BEGIN
 
 stage: TYPE = [1..5];
 
-n: NATURAL = 3;
-k: NATURAL = 2;
+n: NATURAL = 5;
+k: NATURAL = 5;
 
 relays: TYPE = [1..n];
 receivers: TYPE = [1..k];
@@ -177,6 +177,15 @@ validity: THEOREM system |-
 agreement: THEOREM system |-
   G(pc=4 AND fcount(rf, sf, wts) < n =>
     FORALL (x,y:receivers): votes[x]=votes[y]);
+
+vaa: THEOREM system |-
+  G(pc=4 AND fcount(rf, sf, wts) < n =>
+    FORALL (x,y:receivers): votes[x]=votes[y])
+  AND
+  G(pc=4 AND sf=none AND fcount(rf, sf, wts) < n =>
+    FORALL (x:receivers): votes[x]=correct_v);
+
+
 
 %
 % Alternative to specifying THEOREMs using LTL is the
