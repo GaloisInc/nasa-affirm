@@ -17,6 +17,9 @@ all: run
 run: add-srcs
 	cabal exec runghc OM.hs
 
+run_omso: add-srcs
+	cabal exec runghc OMSO.hs
+
 .PHONY: add-srcs
 add-srcs:
 	cabal sandbox init
