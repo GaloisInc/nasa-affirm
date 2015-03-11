@@ -1,5 +1,5 @@
 % AFFIRM Progress
-% Lee Pike; Benjamin Jones; Galois Inc.
+% Benjamin Jones; Lee Pike; Galois Inc.
 % February 11, 2015
 
 Tower to SAL
