@@ -18,7 +18,7 @@
 
 module Main where
 
-import           Control.Monad hiding (when)
+import           Control.Monad hiding (when, forever)
 import           Ivory.Language
 import           Ivory.Stdlib
 import           Ivory.Tower
@@ -26,17 +26,17 @@ import           Tower.AADL
 
 --------------------------------------------------------------------------------
 
--- The type of a period channel
-type Period = ChanOutput (Stored ITime)
-
--- A bunch of type constraints.
-type Constraints v =
-  ( IvoryEq v
-  , IvoryZeroVal v
-  , IvoryType v
-  , IvoryInit v
-  , IvoryStore v
-  )
+-- Compose the system
+system :: Tower () ()
+system = do
+  -- Make the general channel endpoints. The lieutenants share genRx.
+  (genTx, genRx) <- channel
+  -- Run the general every 1ms.
+  genPer <- period (1`ms`)
+  -- Make a message for the general to send ("42")
+  monitor "general" (general (42::Sint32) genPer genTx)
+  -- Make the lieutenants
+  lieutenants genRx
 
 -- The general: broadcast a single message.
 general :: Constraints v
@@ -50,9 +50,7 @@ general v per tx = do
     -- Broadcast whatever message (v) is passed in.
     callback $ const $ emitV e v
 
---------------------------------------------------------------------------------
--- lieutenant start
-
+-- Construct all the lieutenants.
 lieutenants
   :: Constraints v
   => ChanOutput (Stored v)
@@ -107,12 +105,12 @@ rnd2 rxs = do
   -- Local array to hold exchanged vals
   arr    <- state "local_arr"
   -- Counter for filling array
-  bufCnt <- state "bufCnt"
+  bufCnt <- stateInit "bufCnt" (ival 0)
   -- Final result
   res    <- state "final_result"
   mapM_ (rnd2Handler arr bufCnt res (length rxs)) (zip rxs [0..])
 
--- Store incoming value for each lieutenant, do majority vote.
+-- Store incoming value from each lieutenant then perform a majority vote.
 rnd2Handler
   :: Constraints v
   => Ref s (Array 3 (Stored v))
@@ -122,38 +120,25 @@ rnd2Handler
   -> (ChanOutput (Stored v), Integer)
   -> Monitor p ()
 rnd2Handler arr bufCnt res len (rx, i) =
-  handler rx ("rnd2_handler_lieutenant_" ++ show i) $
-    callback $ \m -> do
+  handler rx ("rnd2_handler_lieutenant_" ++ show i) $ do
+    callback $ \msg -> do
+      m  <- deref msg
+      ix <- deref bufCnt
+      -- Invariant: the index is within the array
+      store (arr ! toIx ix) m
+      -- Increment the index reference
+      bufCnt += 1
       bc <- deref bufCnt
-      -- If the buffer is full (buffer count as big as the array), then
-      ifte_ (bc >=? fromIntegral len)
-        (do -- Vote on the result.
-            v <- iVote arr
-            -- Store the result in local memory.
-            store res v
-        )
-        (do m' <- deref m
-            -- Store the incoming value into the local array.
-            store (arr ! fromInteger i) m'
-            -- Increment buffer count.
-            bufCnt += 1
-        )
+      -- When the array is full, vote the result; reset the index.
+      when (bc >=? fromIntegral len)
+           (do store bufCnt 0
+               -- Vote on the result.
+               v <- iVote arr
+               -- Store the result in local memory.
+               store res v
+           )
 
--- lieutenant end
 --------------------------------------------------------------------------------
-
--- Compose the system
-system :: Tower () ()
-system = do
-  -- Make the general channel endpoints
-  (genTx, genRx) <- channel
-  -- Run the general every 1ms.
-  genPer <- period (1`ms`)
-  -- Make a message for the general to send ("42")
-  monitor "general" (general (42::Sint32) genPer genTx)
-  -- Make the lieutenants
-  lieutenants genRx
-
 
 -- Fast majory vote over Ivory arrays.
 iVote :: ( ANat n
@@ -179,14 +164,8 @@ iVote arr = do
       ]
   return =<< deref cR
 
--- Generate the AADL
-main :: IO ()
-main = runCompileAADL opts system
-  where
-  opts = initialOpts { genDirOpts = Just "AADL" }
-
 --------------------------------------------------------------------------------
--- Testing
+-- Helpers
 
 -- Fast majority votes over lists.
 vote :: Eq a => [a] -> a
@@ -202,3 +181,23 @@ vote (l:ls) = vote' l 1 ls
     = vote' x 1 rst
     | otherwise
     = vote' c (cnt-1) rst
+
+-- The type of a period channel
+type Period = ChanOutput (Stored ITime)
+
+-- A bunch of type constraints.
+type Constraints v =
+  ( IvoryEq v
+  , IvoryZeroVal v
+  , IvoryType v
+  , IvoryInit v
+  , IvoryStore v
+  )
+
+--------------------------------------------------------------------------------
+
+-- Generate the AADL
+main :: IO ()
+main = runCompileAADL opts system
+  where
+  opts = initialOpts { genDirOpts = Just "AADL" }
