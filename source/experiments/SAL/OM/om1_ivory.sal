@@ -1,0 +1,38 @@
+om1_ivory: CONTEXT =
+BEGIN
+
+    relays : TYPE = [ 1 .. 5 ];
+    vals : TYPE = INTEGER;
+
+    ivote: MODULE =
+    BEGIN
+        INPUT
+            arr : ARRAY relays OF vals,
+            start : BOOLEAN
+        LOCAL
+            candidate : vals,
+            counter   : INTEGER,
+            pc : INTEGER,
+            pc_loop1 : INTEGER
+        OUTPUT
+            vote : vals,
+            done : BOOLEAN
+        INITIALIZE
+            pc = 0,
+            pc_loop1 = 0
+        DEFINITION
+            arr_size = size(relays)
+        TRANSITION
+        [
+            pc = 0 --> candidate' = 0; pc' = pc + 1
+        []
+            pc = 1 --> counter' = 0; pc' = pc + 1
+        []
+            pc = 2 --> pc_loop1' = 0
+        []
+            ...
+        []
+            ELSE -->
+        ]
+    END;
+END
