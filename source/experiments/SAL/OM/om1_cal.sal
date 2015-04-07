@@ -28,6 +28,9 @@ vals: TYPE = [0..n+1];
 relay_vals: TYPE = ARRAY relays OF vals;
 recv_vals: TYPE = ARRAY receivers OF vals;
 
+% call stacks for 'ivote'
+stack: TYPE = ARRAY receivers OF ARRAY relays OF vals;
+
 % Fault Model
 missing_v: vals = 0;
 def_msg: vals = 0;
@@ -55,6 +58,7 @@ empty_calendar : calendar =
      msgs  := [[i: nodes] [[j:nodes] def_msg]]
   #);
 
+% Calendar API
 msg_pending?(cal: calendar, i: nodes, j:nodes): BOOLEAN =
   cal.chans[i][j];
 msg_read(cal: calendar, i: nodes, j:nodes): vals =
@@ -90,11 +94,15 @@ msg_bcast_receivers(cal: calendar, m: vals, r:relays): calendar =
 
 controller: MODULE =
 BEGIN
-    GLOBAL cal: calendar
-    OUTPUT s_in: vals  % message value for source to send
+    GLOBAL
+        cal: calendar,
+        ivote_stack: stack
+    OUTPUT
+        s_in: vals  % message value for source to send
 INITIALIZATION
+    cal = empty_calendar;
     s_in = correct_v;
-    cal = empty_calendar
+    ivote_stack = [[r:receivers] [[rr:relays] missing_v]]
 TRANSITION
     [
       ELSE -->
@@ -124,7 +132,7 @@ BEGIN
     GLOBAL cal: calendar
     OUTPUT relay_done: BOOLEAN
 INITIALIZATION
-      relay_done = FALSE
+    relay_done = FALSE
 TRANSITION
     [
       (NOT relay_done) AND msg_pending?(cal, source_id, i) -->
@@ -142,19 +150,29 @@ receiver_modes: TYPE = {wait_relay, wait_vote, done};
 
 receiver[p:receivers]: MODULE =
 BEGIN
-    GLOBAL cal: calendar
+    GLOBAL
+        cal: calendar,
+        ivote_stack: stack
     LOCAL
-      recvd: relay_vals,
-      mode: receiver_modes
+        mode: receiver_modes,
+        recvd: relay_vals
     OUTPUT
-      vote: vals,
-      receiver_done: BOOLEAN
+        vote: vals,
+        receiver_done: BOOLEAN
+    DEFINITION
+        recvd = ivote_stack[p]
 INITIALIZATION
     mode = wait_relay;
     receiver_done = FALSE;
-    recvd = [[i:relays] missing_v]
 TRANSITION
     [
+      % rec'v message from relay
+      ([] (i:relays):
+        mode = wait_relay AND msg_pending?(cal, i, p) -->
+          recvd'[i] = msg_read(cal, i, p);
+          cal' = msg_consume(cal, i, p)
+      )
+    []
       % call ivote' when incoming array is complete
       mode = wait_relay AND (FORALL (i:relays): recvd[i] /= missing_v) -->
         cal' = msg_send(cal, p, ivote_id, def_msg);
@@ -172,9 +190,87 @@ TRANSITION
     ]
 END;
 
+
+%----------------------------------------------------------------------
+% Vote Count
+%----------------------------------------------------------------------
+
+candidate_bound: TYPE = vals;
+counter_bound: TYPE = nodes;
+ivote_pc_range: TYPE = [0..100];  % ??? compute at compile time
+ivote_input_size: INTEGER = n;
+ivote_ix_range: TYPE = [0..ivote_input_size+1];
+
+ivote: MODULE =
+BEGIN
+    GLOBAL cal : calendar
+    INPUT  ivote_stack: stack
+    LOCAL
+        % ivory state
+        candidate: vals,           % vars declared local in 'ivote'
+        counter: ivote_ix_range,
+        arr: relay_vals,
+        % aux state
+        ivote_pc: ivote_pc_range,  % pc for 'ivote'
+        ix: ivote_ix_range         % loop counter
+    OUTPUT
+        caller : receivers,  % corresponds to current caller
+        busy : BOOLEAN       % busy counting?
+    DEFINITION
+        arr = ivote_stack[caller]
+INITIALIZATION
+    ivote_pc = -1;
+    ix = -1
+TRANSITION
+    [
+        % receiver 'j' calles ivote
+        ([] (j: receivers):
+          (NOT busy) AND msg_pending?(cal, j, ivote_id) -->
+            caller' = j;
+            % ignore the msg contents
+            cal' = msg_consume(cal, j, ivote_id);
+            ivote_pc' = 0;
+            busy' = TRUE;
+        )
+    []
+        ivote_pc = 0 --> candidate' = 0; ivote_pc' = ivote_pc + 1
+    []
+        ivote_pc = 1 --> counter' = 0;   ivote_pc' = ivote_pc + 1
+    []
+        ivote_pc = 2 --> ix' = 0;        ivote_pc' = ivote_pc + 1
+    []
+        ivote_pc > 2 AND 0 <= ix AND ix <= ivote_input_size -->
+          candidate' = IF arr[ix]=candidate
+                         THEN candidate
+                       ELSIF counter=0
+                         THEN arr[ix]
+                       ELSE candidate ENDIF;
+          counter'   = IF arr[ix]=candidate
+                         THEN counter+1
+                       ELSIF counter=0
+                         THEN 0
+                       ELSE counter-1 ENDIF;
+          ix' = ix + 1;
+          ivote_pc' = ivote_pc + 1
+    []
+        ivote_pc > 2 AND ix > ivote_input_size -->
+          cal' = msg_send(cal, ivote_id, caller, candidate);
+          ivote_pc' = -1;
+          busy' = FALSE
+    []
+        ELSE -->
+    ]
+END;
+
+
+%----------------------------------------------------------------------
+% System
+%----------------------------------------------------------------------
+
 % asyncronous composition is used to better model message passing
 system: MODULE =
    controller
+     [] ivote
      [] source
      [] (WITH OUTPUT relays_done: ARRAY relays OF BOOLEAN
            ([] (x:relays): RENAME relay_done TO relays_done[x] IN relay[x]))
@@ -186,58 +282,6 @@ system: MODULE =
 
 
 %----------------------------------------------------------------------
-% Vote Count
-%----------------------------------------------------------------------
-
-candidate_bound: TYPE = vals;
-counter_bound: TYPE = nodes;
-pc_bound: TYPE = [0..100];  % ???
-
-ivote: MODULE =
-BEGIN
-    GLOBAL cal : calendar
-    LOCAL
-        candidate : candidate_bound,  % var declared local in 'ivote'
-        counter   : counter_bound,    % ditto
-        vote_pc : pc_bound,       % pc for 'ivote'
-        vote_pc_loop1 : pc_bound  % loop counter
-    OUTPUT
-        caller : receivers,  % corresponds to current caller
-        busy : BOOLEAN       % busy counting?
-    % TODO: get input from caller
-    %DEFINITION
-    %    arr = [[i:relays] vecs[i][caller]]
-    INITIALIZATION
-        vote_pc = -1;
-        vote_pc_loop1 = -1
-    TRANSITION
-    [
-        % receiver 'j' calles ivote
-        ([] (j: receivers):
-          (NOT busy) AND msg_pending?(cal, j, ivote_id) -->
-            caller' = j;
-            % ignore the msg contents
-            cal' = msg_consume(cal, j, ivote_id);
-            vote_pc' = 0;
-            busy' = TRUE;
-        )
-    []
-        vote_pc = 0 --> candidate' = 0;     vote_pc' = vote_pc + 1
-    []
-        vote_pc = 1 --> counter' = 0;       vote_pc' = vote_pc + 1
-    []
-        vote_pc = 2 --> vote_pc_loop1' = 0; vote_pc' = vote_pc + 1
-    % []
-    %     ...
-    []
-        ELSE -->
-    ]
-END;
-
-
-
-
-%----------------------------------------------------------------------
 % Syncronous Observer
 %----------------------------------------------------------------------
 
@@ -246,29 +290,30 @@ END;
 observer: MODULE =
 BEGIN
   INPUT
-    votes : recv_vals
+    receivers_done: ARRAY receivers OF BOOLEAN,
+    votes: recv_vals
   OUTPUT
-    ok : BOOLEAN
+    ok: BOOLEAN
   INITIALIZATION
     ok = TRUE
   TRANSITION
   [
-    % TODO: replace with asyncronous versions
     no_validity:
-      NOT (FORALL (x:receivers): votes[x]=correct_v)
-      --> ok' = FALSE
+      (FORALL (x:receivers): receivers_done[x]) AND
+      (NOT (FORALL (x:receivers): votes[x]=correct_v)) -->
+        ok' = FALSE
   []
     no_agreement:
-      NOT (FORALL (x,y:receivers): votes[x]=votes[y])
-      --> ok' = FALSE
+      (FORALL (x:receivers): receivers_done[x]) AND
+      (NOT (FORALL (x,y:receivers): votes[x]=votes[y])) -->
+        ok' = FALSE
   []
     ELSE -->
   ]
 END;
 
 observed_vaa: THEOREM (system || observer) |- G(ok);
-
-ivote_test: THEOREM (system [] ivote) |- F(busy);  % ok to -d 10
-ivote_test2: THEOREM (system [] ivote) |- G(NOT busy);
+ivote_test: THEOREM  (system) |- F(busy);      % ok to depth 10
+ivote_test2: THEOREM (system) |- G(NOT busy);  % ?
 
 END
