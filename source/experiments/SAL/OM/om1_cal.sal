@@ -1,15 +1,22 @@
-% SAL model of OM(1) using asyncronous message passing
+% SAL model of OM(1)
+%
+% Features:
+%   * asyncronous message passing
+%   * calendar automata
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
 om1_cal: CONTEXT =
 BEGIN
 
+
+%--- Nodes and IDs --------------------------------------------------
+
 n: NATURAL = 5;  % num relays
 k: NATURAL = 5;  % num receivers
 
 % IDs for nodes
-nodes: TYPE = [0..n+k+1];
+nodes: TYPE = [0..n+k+1];  % n relays, k receivers, 1 source, 1 vote procedure
 source_id: nodes = 0;
 ivote_id: nodes = n+k+1;
 
@@ -23,31 +30,36 @@ receiver_id_min: nodes = n+1;
 receiver_id_max: nodes = n+k;
 receivers: TYPE = [n+1..n+k];
 
+% Helper functions for identification
+is_source?(i: nodes):   BOOLEAN = i = source_id;
+is_relay?(i: nodes):    BOOLEAN = relay_id_min <= i AND i <= relay_id_max;
+is_receiver?(i: nodes): BOOLEAN = receiver_id_min <= i AND i <= receiver_id_max;
+
+%--- Messages and Values --------------------------------------------
+
 % values recieved by relays and receivers
 vals: TYPE = [0..n+1];
+missing_v: vals = 0;    % no message present
+correct_v: vals = n+1;  % intended message from source
+
 relay_vals: TYPE = ARRAY relays OF vals;
-recv_vals: TYPE = ARRAY receivers OF vals;
+recv_vals:  TYPE = ARRAY receivers OF vals;
 
 % call stacks for 'ivote'
-stack: TYPE = ARRAY receivers OF ARRAY relays OF vals;
+stack: TYPE = ARRAY receivers OF relay_vals;
 
-% Fault Model
-missing_v: vals = 0;
-def_msg: vals = 0;
-correct_v: vals = n+1;
 
-%----------------------------------------------------------------------
-% Calendar Automata
-%
-% calendar data structure for communication between nodes
+%--- Calendar Automata ----------------------------------------------
+
+% Calendar data structure for communication between nodes. The structure
+% allows for at most 1 message to be sent from any node to any other
+% at a given time.
 %
 % chans[i][j] = status of the link between node i and j
 %   -> TRUE means one msg waiting to be recieved
 %   -> FALSE means no msg pending
-% msgs[i][j] = content of the message
 %
-%-------------------------------------------------------------
-
+% msgs[i][j] = content of the message (of type 'vals')
 calendar: TYPE =
   [# chans: ARRAY nodes OF ARRAY nodes OF BOOLEAN,
      msgs:  ARRAY nodes OF ARRAY nodes OF vals
@@ -55,7 +67,7 @@ calendar: TYPE =
 
 empty_calendar : calendar =
   (# chans := [[i: nodes] [[j:nodes] FALSE]],
-     msgs  := [[i: nodes] [[j:nodes] def_msg]]
+     msgs  := [[i: nodes] [[j:nodes] missing_v]]
   #);
 
 % Calendar API
@@ -63,17 +75,14 @@ msg_pending?(cal: calendar, i: nodes, j:nodes): BOOLEAN =
   cal.chans[i][j];
 msg_read(cal: calendar, i: nodes, j:nodes): vals =
   cal.msgs[i][j];
+% TODO: possibility of overwrite
 msg_send(cal: calendar, i: nodes, j:nodes, m:vals): calendar =
   cal WITH .chans[i][j] := TRUE
       WITH .msgs[i][j]  := m;
 msg_consume(cal: calendar, i: nodes, j:nodes): calendar =
   cal WITH .chans[i][j] := FALSE;
 
-is_source?(i: nodes):   BOOLEAN = i = source_id;
-is_relay?(i: nodes):    BOOLEAN = relay_id_min <= i AND i <= relay_id_max;
-is_receiver?(i: nodes): BOOLEAN = receiver_id_min <= i AND i <= receiver_id_max;
-
-% Special broadcast functions
+% Broadcast a message from the source to all the relays
 msg_bcast_relays(cal: calendar, m: vals): calendar =
   (# chans := [[i:nodes] [[j:nodes] IF is_source?(i) AND is_relay?(j) THEN TRUE
                                     ELSE cal.chans[i][j] ENDIF]],
@@ -81,6 +90,7 @@ msg_bcast_relays(cal: calendar, m: vals): calendar =
                                     ELSE cal.msgs[i][j] ENDIF]]
   #);
 
+% Broadcast a message from relay 'r' to all receivers
 msg_bcast_receivers(cal: calendar, m: vals, r:relays): calendar =
   (# chans := [[i:nodes] [[j:nodes] IF i=r AND is_receiver?(j) THEN TRUE
                                     ELSE cal.chans[i][j] ENDIF]],
@@ -92,6 +102,11 @@ msg_bcast_receivers(cal: calendar, m: vals, r:relays): calendar =
 % State Machine
 %----------------------------------------------------------------------
 
+% Notes:
+%
+% 'source_done', 'relays_done', etc... are for debugging and verification
+%
+
 controller: MODULE =
 BEGIN
     GLOBAL
@@ -102,7 +117,7 @@ BEGIN
 INITIALIZATION
     cal = empty_calendar;
     s_in = correct_v;
-    ivote_stack = [[r:receivers] [[rr:relays] missing_v]]
+    ivote_stack = [[p:receivers] [[i:relays] missing_v]]
 TRANSITION
     [
       ELSE -->
@@ -146,6 +161,8 @@ TRANSITION
     ]
 END;
 
+% wait_relay means waiting for all relays to send their messages
+% wait_vote  means waiting on the ivote machine to return an answer
 receiver_modes: TYPE = {wait_relay, wait_vote, done};
 
 receiver[p:receivers]: MODULE =
@@ -154,29 +171,28 @@ BEGIN
         cal: calendar,
         ivote_stack: stack
     LOCAL
-        mode: receiver_modes,
-        recvd: relay_vals
+        mode: receiver_modes
     OUTPUT
         vote: vals,
         receiver_done: BOOLEAN
-    DEFINITION
-        recvd = ivote_stack[p]
 INITIALIZATION
     mode = wait_relay;
     receiver_done = FALSE;
+    vote = missing_v
 TRANSITION
     [
       % rec'v message from relay
       ([] (i:relays):
         mode = wait_relay AND msg_pending?(cal, i, p) -->
-          recvd'[i] = msg_read(cal, i, p);
+          ivote_stack'[p][i] = msg_read(cal, i, p);
           cal' = msg_consume(cal, i, p)
       )
     []
       % call ivote' when incoming array is complete
-      mode = wait_relay AND (FORALL (i:relays): recvd[i] /= missing_v) -->
-        cal' = msg_send(cal, p, ivote_id, def_msg);
-        mode' = wait_vote;
+      % TODO: model how the Tower code determines the array is complete
+      mode = wait_relay AND (FORALL (i:relays): ivote_stack[p][i] /= missing_v) -->
+        cal'  = msg_send(cal, p, ivote_id, missing_v);
+        mode' = wait_vote
     []
       % collect return value from 'ivote'
       mode = wait_vote AND msg_pending?(cal, ivote_id, p) -->
@@ -199,7 +215,7 @@ candidate_bound: TYPE = vals;
 counter_bound: TYPE = nodes;
 ivote_pc_range: TYPE = [0..100];  % ??? compute at compile time
 ivote_input_size: INTEGER = n;
-ivote_ix_range: TYPE = [0..ivote_input_size+1];
+ivote_ix_range: TYPE = [0..ivote_input_size];
 
 ivote: MODULE =
 BEGIN
@@ -214,32 +230,32 @@ BEGIN
         ivote_pc: ivote_pc_range,  % pc for 'ivote'
         ix: ivote_ix_range         % loop counter
     OUTPUT
-        caller : receivers,  % corresponds to current caller
-        busy : BOOLEAN       % busy counting?
+        caller : receivers,   % corresponds to current caller
+        ivote_busy : BOOLEAN  % busy counting?
     DEFINITION
         arr = ivote_stack[caller]
 INITIALIZATION
-    ivote_pc = -1;
-    ix = -1
+    ivote_pc = 0;
+    ivote_busy = FALSE
 TRANSITION
     [
         % receiver 'j' calles ivote
         ([] (j: receivers):
-          (NOT busy) AND msg_pending?(cal, j, ivote_id) -->
+          (NOT ivote_busy) AND msg_pending?(cal, j, ivote_id) -->
             caller' = j;
             % ignore the msg contents
             cal' = msg_consume(cal, j, ivote_id);
             ivote_pc' = 0;
-            busy' = TRUE;
+            ivote_busy' = TRUE
         )
     []
-        ivote_pc = 0 --> candidate' = 0; ivote_pc' = ivote_pc + 1
+        ivote_busy AND ivote_pc = 0 --> candidate' = 0; ivote_pc' = ivote_pc + 1
     []
-        ivote_pc = 1 --> counter' = 0;   ivote_pc' = ivote_pc + 1
+        ivote_busy AND ivote_pc = 1 --> counter' = 0;   ivote_pc' = ivote_pc + 1
     []
-        ivote_pc = 2 --> ix' = 0;        ivote_pc' = ivote_pc + 1
+        ivote_busy AND ivote_pc = 2 --> ix' = 0;        ivote_pc' = ivote_pc + 1
     []
-        ivote_pc > 2 AND 0 <= ix AND ix <= ivote_input_size -->
+        ivote_busy AND ivote_pc > 2 AND 0 <= ix AND ix < ivote_input_size -->
           candidate' = IF arr[ix]=candidate
                          THEN candidate
                        ELSIF counter=0
@@ -253,10 +269,9 @@ TRANSITION
           ix' = ix + 1;
           ivote_pc' = ivote_pc + 1
     []
-        ivote_pc > 2 AND ix > ivote_input_size -->
+        ivote_busy AND ivote_pc > 2 AND ix = ivote_input_size -->
           cal' = msg_send(cal, ivote_id, caller, candidate);
-          ivote_pc' = -1;
-          busy' = FALSE
+          ivote_busy' = FALSE
     []
         ELSE -->
     ]
@@ -292,10 +307,8 @@ BEGIN
   INPUT
     receivers_done: ARRAY receivers OF BOOLEAN,
     votes: recv_vals
-  OUTPUT
-    ok: BOOLEAN
-  INITIALIZATION
-    ok = TRUE
+  OUTPUT ok: BOOLEAN
+  INITIALIZATION ok = TRUE
   TRANSITION
   [
     no_validity:
@@ -312,8 +325,18 @@ BEGIN
   ]
 END;
 
-observed_vaa: THEOREM (system || observer) |- G(ok);
-ivote_test: THEOREM  (system) |- F(busy);      % ok to depth 10
-ivote_test2: THEOREM (system) |- G(NOT busy);  % ?
+
+%--- Verification ---------------------------------------------------
+
+vaa: THEOREM (system || observer) |- G(ok);
+
+%% Tests
+
+% relays finish eventually
+relays_test: THEOREM system |- F(FORALL (i:relays): relays_done[i]);
+
+% ivote gets called eventually
+ivote_busy: THEOREM system |- F((NOT ivote_busy) AND F(ivote_busy));
+ivote_busy_next: THEOREM system |- F((NOT ivote_busy) AND X(ivote_busy));
 
 END
