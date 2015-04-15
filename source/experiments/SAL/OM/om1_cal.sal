@@ -12,8 +12,8 @@ BEGIN
 
 %--- Nodes and IDs --------------------------------------------------
 
-n: NATURAL = 5;  % num relays
-k: NATURAL = 5;  % num receivers
+n: NATURAL = 3;  % num relays
+k: NATURAL = 3;  % num receivers
 
 % IDs for nodes
 nodes: TYPE = [0..n+k+1];  % n relays, k receivers, 1 source, 1 vote procedure
@@ -80,7 +80,8 @@ msg_send(cal: calendar, i: nodes, j:nodes, m:vals): calendar =
   cal WITH .chans[i][j] := TRUE
       WITH .msgs[i][j]  := m;
 msg_consume(cal: calendar, i: nodes, j:nodes): calendar =
-  cal WITH .chans[i][j] := FALSE;
+  cal WITH .chans[i][j] := FALSE
+      WITH .msgs[i][j]  := missing_v;
 
 % Broadcast a message from the source to all the relays
 msg_bcast_relays(cal: calendar, m: vals): calendar =
@@ -110,17 +111,26 @@ msg_bcast_receivers(cal: calendar, m: vals, r:relays): calendar =
 controller: MODULE =
 BEGIN
     GLOBAL
-        cal: calendar,
-        ivote_stack: stack
+      cal: calendar,
+      ivote_stack: stack
+    INPUT
+      source_done: BOOLEAN,
+      relays_done: ARRAY relays OF BOOLEAN,
+      receivers_done: ARRAY receivers OF BOOLEAN
     OUTPUT
-        s_in: vals  % message value for source to send
+      s_in: vals  % message value for source to send
 INITIALIZATION
     cal = empty_calendar;
     s_in = correct_v;
     ivote_stack = [[p:receivers] [[i:relays] missing_v]]
 TRANSITION
     [
-      ELSE -->
+      % prevents deadlock
+      controller_else:
+      source_done AND
+        (FORALL (i:relays): relays_done[i]) AND
+        (FORALL (r:receivers): receivers_done[r]) -->
+          % stutter
     ]
 END;
 
@@ -134,11 +144,10 @@ INITIALIZATION
     source_done = FALSE;
 TRANSITION
     [
+      source_broadcast:
       NOT source_done -->
         cal' = msg_bcast_relays(cal, s_in);
         source_done' = TRUE
-    []
-      ELSE -->
     ]
 END;
 
@@ -150,14 +159,13 @@ INITIALIZATION
     relay_done = FALSE
 TRANSITION
     [
+      relay_broadcast:
       (NOT relay_done) AND msg_pending?(cal, source_id, i) -->
         % broadcast message to receivers and consume in one step
         cal' = LET m:vals = msg_read(cal, source_id, i) IN
                LET cal1:calendar = msg_bcast_receivers(cal, m, i) IN
                msg_consume(cal1, source_id, i);
         relay_done' = TRUE
-    []
-      ELSE -->
     ]
 END;
 
@@ -183,6 +191,7 @@ TRANSITION
     [
       % rec'v message from relay
       ([] (i:relays):
+        receiver_recv:
         mode = wait_relay AND msg_pending?(cal, i, p) -->
           ivote_stack'[p][i] = msg_read(cal, i, p);
           cal' = msg_consume(cal, i, p)
@@ -190,19 +199,21 @@ TRANSITION
     []
       % call ivote' when incoming array is complete
       % TODO: model how the Tower code determines the array is complete
+      receiver_call_ivote:
       mode = wait_relay AND (FORALL (i:relays): ivote_stack[p][i] /= missing_v) -->
         cal'  = msg_send(cal, p, ivote_id, missing_v);
         mode' = wait_vote
     []
       % collect return value from 'ivote'
+      receiver_return_ivote:
       mode = wait_vote AND msg_pending?(cal, ivote_id, p) -->
         vote' = msg_read(cal, ivote_id, p);
         cal'  = msg_consume(cal, ivote_id, p);
         mode' = done
     []
-      mode = done --> receiver_done' = TRUE
-    []
-      ELSE -->
+      receiver_done:
+      mode = done AND NOT receiver_done -->
+        receiver_done' = TRUE
     ]
 END;
 
@@ -241,6 +252,7 @@ TRANSITION
     [
         % receiver 'j' calles ivote
         ([] (j: receivers):
+          ivote_called:
           (NOT ivote_busy) AND msg_pending?(cal, j, ivote_id) -->
             caller' = j;
             % ignore the msg contents
@@ -249,12 +261,16 @@ TRANSITION
             ivote_busy' = TRUE
         )
     []
+        ivote_pc_0:
         ivote_busy AND ivote_pc = 0 --> candidate' = 0; ivote_pc' = ivote_pc + 1
     []
+        ivote_pc_1:
         ivote_busy AND ivote_pc = 1 --> counter' = 0;   ivote_pc' = ivote_pc + 1
     []
+        ivote_pc_2:
         ivote_busy AND ivote_pc = 2 --> ix' = 0;        ivote_pc' = ivote_pc + 1
     []
+        ivote_loop:
         ivote_busy AND ivote_pc > 2 AND 0 <= ix AND ix < ivote_input_size -->
           candidate' = IF arr[ix]=candidate
                          THEN candidate
@@ -269,11 +285,10 @@ TRANSITION
           ix' = ix + 1;
           ivote_pc' = ivote_pc + 1
     []
+        ivote_return:
         ivote_busy AND ivote_pc > 2 AND ix = ivote_input_size -->
           cal' = msg_send(cal, ivote_id, caller, candidate);
           ivote_busy' = FALSE
-    []
-        ELSE -->
     ]
 END;
 
@@ -305,38 +320,52 @@ system: MODULE =
 observer: MODULE =
 BEGIN
   INPUT
+    source_done: BOOLEAN,
+    relays_done: ARRAY relays OF BOOLEAN,
     receivers_done: ARRAY receivers OF BOOLEAN,
     votes: recv_vals
-  OUTPUT ok: BOOLEAN
-  INITIALIZATION ok = TRUE
-  TRANSITION
+  OUTPUT
+    vaa_ok: BOOLEAN,
+    not_done: BOOLEAN
+INITIALIZATION
+  vaa_ok = TRUE;
+  not_done = TRUE
+TRANSITION
   [
     no_validity:
       (FORALL (x:receivers): receivers_done[x]) AND
       (NOT (FORALL (x:receivers): votes[x]=correct_v)) -->
-        ok' = FALSE
+        vaa_ok' = FALSE
   []
     no_agreement:
       (FORALL (x:receivers): receivers_done[x]) AND
       (NOT (FORALL (x,y:receivers): votes[x]=votes[y])) -->
-        ok' = FALSE
+        vaa_ok' = FALSE
   []
-    ELSE -->
+    % For the test THEOREMS below
+    all_done:
+      source_done AND
+      (FORALL (i:relays): relays_done[i]) AND
+      (FORALL (r:receivers): receivers_done[r]) -->
+        not_done' = FALSE
   ]
 END;
 
 
 %--- Verification ---------------------------------------------------
 
-vaa: THEOREM (system || observer) |- G(ok);
+vaa: THEOREM (system || observer) |- G(vaa_ok);
 
 %% Tests
 
-% relays finish eventually
+% relays finish eventually: sal-smc proved
 relays_test: THEOREM system |- F(FORALL (i:relays): relays_done[i]);
 
-% ivote gets called eventually
+% ivote gets called eventually: sal-smc proved
 ivote_busy: THEOREM system |- F((NOT ivote_busy) AND F(ivote_busy));
 ivote_busy_next: THEOREM system |- F((NOT ivote_busy) AND X(ivote_busy));
+
+% everyone finishes eventually:
+all_done: THEOREM (system || observer) |- F(NOT not_done);
 
 END
