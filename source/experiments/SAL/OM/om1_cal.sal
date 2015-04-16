@@ -356,6 +356,13 @@ END;
 
 vaa: THEOREM (system || observer) |- G(vaa_ok);
 
+% unused channels are empty
+% sal-bmc -d 60
+unused_chans: LEMMA (system || observer) |-
+  (FORALL (i:relays): NOT cal.chans[i][source_id]) AND
+  (FORALL (i:relays): NOT cal.chans[i][ivote_id]) AND
+  (FORALL (i:relays): (FORALL (j:relays): NOT cal.chans[i][j]));
+
 %% Tests
 
 % relays finish eventually: sal-smc proved
