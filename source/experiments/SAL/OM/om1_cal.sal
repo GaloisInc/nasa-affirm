@@ -2,7 +2,7 @@
 %
 % Features:
 %   * asyncronous message passing
-%   * calendar automata
+%   * channel automata
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
@@ -49,54 +49,88 @@ recv_vals:  TYPE = ARRAY receivers OF vals;
 stack: TYPE = ARRAY receivers OF relay_vals;
 
 
-%--- Calendar Automata ----------------------------------------------
+%--- channel Automata ----------------------------------------------
 
-% Calendar data structure for communication between nodes. The structure
+% type indexing channels between nodes
+channel_idx : TYPE = [nodes, nodes];
+
+% Channels defined in this particular model
+channel_set : TYPE =
+  { x:channel_idx | (x.1 = source_id   AND is_relay?(x.2))    OR
+                    (is_relay?(x.1)    AND is_receiver?(x.2)) OR
+                    (is_receiver?(x.1) AND x.2 = ivote_id)    OR
+                    (ivote_id = x.1    AND is_receiver?(x.2))
+  };
+
+% compute an ID for each tuple in the channel_set, need this to index into
+% chans array
+num_channels : INTEGER = k + k*n + 2*n;
+channel_ids : TYPE = [0..num_channels-1];
+channel_id(i: channel_set): channel_ids =
+  IF i.1=source_id AND is_relay?(1.2)
+    THEN i.2-relay_id_min  % 0..k-1
+  ELSIF is_relay?(i.1) AND is_receiver?(i.2)
+    THEN k + n*(i.1-relay_id_min) + (i.2-receiver_id_min)  % k..(k+k*n-1)
+  ELSIF is_receiver?(i.1) AND i.2=ivote_id
+    THEN k + k*n + (i.1-receiver_id_min)
+    ELSE k + k*n + n + (i.2-receiver_id_min)
+  ENDIF;
+
+% empty : no message present
+% transit : message in transit but not ready to be consumed
+% ready : message ready to be consumed
+channel_status : TYPE = {empty, transit, ready};
+
+% channels data structure for communication between nodes. The structure
 % allows for at most 1 message to be sent from any node to any other
 % at a given time.
 %
-% chans[i][j] = status of the link between node i and j
-%   -> TRUE means one msg waiting to be recieved
-%   -> FALSE means no msg pending
+% chans[(i,j)] = status of the link between node i and j
+% msgs[(i,j)] = content of the message (of type 'vals')
 %
-% msgs[i][j] = content of the message (of type 'vals')
-calendar: TYPE =
-  [# chans: ARRAY nodes OF ARRAY nodes OF BOOLEAN,
-     msgs:  ARRAY nodes OF ARRAY nodes OF vals
-   #];
+channels: TYPE =
+  [#
+     chans: ARRAY channel_ids OF channel_status,
+     msgs:  ARRAY channel_ids OF vals
+  #];
 
-empty_calendar : calendar =
-  (# chans := [[i: nodes] [[j:nodes] FALSE]],
-     msgs  := [[i: nodes] [[j:nodes] missing_v]]
+empty_channels : channels =
+  (#
+     chans := [[i:channel_ids] empty],
+     msgs  := [[i:channel_ids] missing_v]
   #);
 
-% Calendar API
-msg_pending?(cal: calendar, i: nodes, j:nodes): BOOLEAN =
-  cal.chans[i][j];
-msg_read(cal: calendar, i: nodes, j:nodes): vals =
-  cal.msgs[i][j];
-% TODO: possibility of overwrite
-msg_send(cal: calendar, i: nodes, j:nodes, m:vals): calendar =
-  cal WITH .chans[i][j] := TRUE
-      WITH .msgs[i][j]  := m;
-msg_consume(cal: calendar, i: nodes, j:nodes): calendar =
-  cal WITH .chans[i][j] := FALSE
-      WITH .msgs[i][j]  := missing_v;
+%--- channels API ---
+
+msg_pending?(cha: channels, i: channel_set): BOOLEAN =
+  cha.chans[channel_id(i)] = ready;
+
+msg_read(cha: channels, i: channel_set): vals =
+  cha.msgs[channel_id(i)];
+
+% TODO: handle multiple concurrent messages from i -> j
+msg_send(cha: channels, i: channel_set, m:vals): channels =
+  cha WITH .chans[channel_id(i)] := ready  % TODO: transit
+      WITH .msgs[channel_id(i)]  := m;
+
+msg_consume(cha: channels, i: channel_set): channels =
+  cha WITH .chans[channel_id(i)] := empty
+      WITH .msgs[channel_id(i)]  := missing_v;
 
 % Broadcast a message from the source to all the relays
-msg_bcast_relays(cal: calendar, m: vals): calendar =
-  (# chans := [[i:nodes] [[j:nodes] IF is_source?(i) AND is_relay?(j) THEN TRUE
-                                    ELSE cal.chans[i][j] ENDIF]],
-     msgs  := [[i:nodes] [[j:nodes] IF is_source?(i) AND is_relay?(j) THEN m
-                                    ELSE cal.msgs[i][j] ENDIF]]
+msg_bcast_relays(cha: channels, m: vals): channels =
+  (# chans := [[i:channel_ids] IF 0 <= i AND i < k THEN ready
+                               ELSE cha.chans[i] ENDIF],
+     msgs  := [[i:channel_ids] IF 0 <= i AND i < k THEN m
+                               ELSE cha.msgs[i] ENDIF]
   #);
 
 % Broadcast a message from relay 'r' to all receivers
-msg_bcast_receivers(cal: calendar, m: vals, r:relays): calendar =
-  (# chans := [[i:nodes] [[j:nodes] IF i=r AND is_receiver?(j) THEN TRUE
-                                    ELSE cal.chans[i][j] ENDIF]],
-     msgs  := [[i:nodes] [[j:nodes] IF i=r AND is_receiver?(j) THEN m
-                                    ELSE cal.msgs[i][j] ENDIF]]
+msg_bcast_receivers(cha: channels, m: vals, r:relays): channels =
+  (# chans := [[i:channel_ids] IF k+(r-relay_id_min)*n <= i AND i < k+(r-relay_id_min+1)*n THEN ready
+                               ELSE cha.chans[i] ENDIF],
+     msgs  := [[i:channel_ids] IF k+(r-relay_id_min)*n <= i AND i < k+(r-relay_id_min+1)*n THEN m
+                               ELSE cha.msgs[i] ENDIF]
   #);
 
 %----------------------------------------------------------------------
@@ -111,7 +145,7 @@ msg_bcast_receivers(cal: calendar, m: vals, r:relays): calendar =
 controller: MODULE =
 BEGIN
     GLOBAL
-      cal: calendar,
+      cha: channels,
       ivote_stack: stack
     INPUT
       source_done: BOOLEAN,
@@ -120,24 +154,25 @@ BEGIN
     OUTPUT
       s_in: vals  % message value for source to send
 INITIALIZATION
-    cal = empty_calendar;
+    cha = empty_channels;
     s_in = correct_v;
     ivote_stack = [[p:receivers] [[i:relays] missing_v]]
 TRANSITION
     [
-      % prevents deadlock
-      controller_else:
-      source_done AND
-        (FORALL (i:relays): relays_done[i]) AND
-        (FORALL (r:receivers): receivers_done[r]) -->
-          % stutter
+      ELSE -->
+      % % prevents deadlock
+      % controller_else:
+      % source_done AND
+      %   (FORALL (i:relays): relays_done[i]) AND
+      %   (FORALL (r:receivers): receivers_done[r]) -->
+      %     % stutter
     ]
 END;
 
 % 'source' sends a message (s_in) to all relays
 source: MODULE =
 BEGIN
-    GLOBAL cal: calendar
+    GLOBAL cha: channels
     INPUT  s_in: vals
     OUTPUT source_done: BOOLEAN
 INITIALIZATION
@@ -146,25 +181,25 @@ TRANSITION
     [
       source_broadcast:
       NOT source_done -->
-        cal' = msg_bcast_relays(cal, s_in);
+        cha' = msg_bcast_relays(cha, s_in);
         source_done' = TRUE
     ]
 END;
 
 relay[i: relays]: MODULE =
 BEGIN
-    GLOBAL cal: calendar
+    GLOBAL cha: channels
     OUTPUT relay_done: BOOLEAN
 INITIALIZATION
     relay_done = FALSE
 TRANSITION
     [
       relay_broadcast:
-      (NOT relay_done) AND msg_pending?(cal, source_id, i) -->
+      (NOT relay_done) AND msg_pending?(cha, (source_id, i)) -->
         % broadcast message to receivers and consume in one step
-        cal' = LET m:vals = msg_read(cal, source_id, i) IN
-               LET cal1:calendar = msg_bcast_receivers(cal, m, i) IN
-               msg_consume(cal1, source_id, i);
+        cha' = LET m:vals = msg_read(cha, (source_id, i)) IN
+               LET cal1:channels = msg_bcast_receivers(cha, m, i) IN
+               msg_consume(cal1, (source_id, i));
         relay_done' = TRUE
     ]
 END;
@@ -176,13 +211,13 @@ receiver_modes: TYPE = {wait_relay, wait_vote, done};
 receiver[p:receivers]: MODULE =
 BEGIN
     GLOBAL
-        cal: calendar,
-        ivote_stack: stack
+      cha: channels,
+      ivote_stack: stack
     LOCAL
-        mode: receiver_modes
+      mode: receiver_modes
     OUTPUT
-        vote: vals,
-        receiver_done: BOOLEAN
+      vote: vals,
+      receiver_done: BOOLEAN
 INITIALIZATION
     mode = wait_relay;
     receiver_done = FALSE;
@@ -192,23 +227,23 @@ TRANSITION
       % rec'v message from relay
       ([] (i:relays):
         receiver_recv:
-        mode = wait_relay AND msg_pending?(cal, i, p) -->
-          ivote_stack'[p][i] = msg_read(cal, i, p);
-          cal' = msg_consume(cal, i, p)
+        mode = wait_relay AND msg_pending?(cha, (i, p)) -->
+          ivote_stack'[p][i] = msg_read(cha, (i, p));
+          cha' = msg_consume(cha, (i, p))
       )
     []
       % call ivote' when incoming array is complete
       % TODO: model how the Tower code determines the array is complete
       receiver_call_ivote:
       mode = wait_relay AND (FORALL (i:relays): ivote_stack[p][i] /= missing_v) -->
-        cal'  = msg_send(cal, p, ivote_id, missing_v);
+        cha'  = msg_send(cha, (p, ivote_id), missing_v);
         mode' = wait_vote
     []
       % collect return value from 'ivote'
       receiver_return_ivote:
-      mode = wait_vote AND msg_pending?(cal, ivote_id, p) -->
-        vote' = msg_read(cal, ivote_id, p);
-        cal'  = msg_consume(cal, ivote_id, p);
+      mode = wait_vote AND msg_pending?(cha, (ivote_id, p)) -->
+        vote' = msg_read(cha, (ivote_id, p));
+        cha'  = msg_consume(cha, (ivote_id, p));
         mode' = done
     []
       receiver_done:
@@ -230,7 +265,7 @@ ivote_ix_range: TYPE = [0..ivote_input_size];
 
 ivote: MODULE =
 BEGIN
-    GLOBAL cal : calendar
+    GLOBAL cha : channels
     INPUT  ivote_stack: stack
     LOCAL
         % ivory state
@@ -253,10 +288,10 @@ TRANSITION
         % receiver 'j' calles ivote
         ([] (j: receivers):
           ivote_called:
-          (NOT ivote_busy) AND msg_pending?(cal, j, ivote_id) -->
+          (NOT ivote_busy) AND msg_pending?(cha, (j, ivote_id)) -->
             caller' = j;
             % ignore the msg contents
-            cal' = msg_consume(cal, j, ivote_id);
+            cha' = msg_consume(cha, (j, ivote_id));
             ivote_pc' = 0;
             ivote_busy' = TRUE
         )
@@ -287,7 +322,7 @@ TRANSITION
     []
         ivote_return:
         ivote_busy AND ivote_pc > 2 AND ix = ivote_input_size -->
-          cal' = msg_send(cal, ivote_id, caller, candidate);
+          cha' = msg_send(cha, (ivote_id, caller), candidate);
           ivote_busy' = FALSE
     ]
 END;
@@ -351,17 +386,11 @@ TRANSITION
   ]
 END;
 
+system_observer: MODULE = system || observer;
 
 %--- Verification ---------------------------------------------------
 
 vaa: THEOREM (system || observer) |- G(vaa_ok);
-
-% unused channels are empty
-% sal-bmc -d 60
-unused_chans: LEMMA (system || observer) |-
-  (FORALL (i:relays): NOT cal.chans[i][source_id]) AND
-  (FORALL (i:relays): NOT cal.chans[i][ivote_id]) AND
-  (FORALL (i:relays): (FORALL (j:relays): NOT cal.chans[i][j]));
 
 %% Tests
 
@@ -374,5 +403,6 @@ ivote_busy_next: THEOREM system |- F((NOT ivote_busy) AND X(ivote_busy));
 
 % everyone finishes eventually:
 all_done: THEOREM (system || observer) |- F(NOT not_done);
+not_all_done: THEOREM (system || observer) |- G(not_done);
 
 END
