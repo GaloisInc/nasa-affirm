@@ -1,0 +1,160 @@
+semantics: THEORY
+BEGIN
+
+% Environmental signals: clocks and events. The environment can be thought of as
+% a "global" process that can send messages to every process.
+Env     : Type+
+
+% Channels between processes
+Chan    : Type+
+
+% Messages send over channels or from the environment
+Msg     : Type+
+nullMsg : Msg
+clkMsg  : nonempty_pred[Msg]
+
+% Processes
+Proc    : Type+
+
+% A process' state
+State       : Type+
+stateInit   : State
+
+% Full system state generated from each process' state.
+GlobalState : Type = [Proc -> State]
+globalInit  : GlobalState
+
+Time   : Type = { r:real | r >= 0 }
+
+% An event is unique in the system. Events are points in time (e.g., calendars)
+% at which one or more system events occurs.
+Event  : Type = nat
+
+c     : VAR Chan
+e     : VAR Env
+v     : VAR Event
+tx,rx : VAR Proc
+s     : VAR State
+t     : VAR Time
+m     : VAR Msg
+
+% --------------------------------------
+% Implementation-defined (undefined functions)
+% --------------------------------------
+
+% Map from an event to real-time.
+fromEvent(v) : Time
+
+% Environmental message received by rx at time t. Either a periodic event or a
+% signal.
+envMsg(t, rx, e) : Msg
+
+% Message sent by tx into channel c at time t.
+outMsg(t, tx, c) : Msg
+
+% Message pulled out of channel c by rx at time t.
+inMsg(t, rx, c) : Msg
+
+% The inbound channels of rx.
+inChan(rx) : pred[Chan]
+InChan(rx) : Type = { c | inChan(rx)(c) }
+
+% State update function for a process.
+update(rx, s, m) : State
+
+% (Nondeterministically) fold over the rx's channels, updating the state based
+% on each inbound message, to create a new state.
+foldStates(s, rx, (f:[InChan(rx), State -> State])): State
+
+% --------------------------------------
+% Defined functions
+% --------------------------------------
+
+hasClock(t, rx) : bool =
+  EXISTS e :
+    clkMsg(envMsg(t, rx, e))
+
+noClock(rx) : bool =
+  FORALL t, e :
+    NOT clkMsg(envMsg(t, rx, e))
+
+% pull semantics: rx gets message m at time t on channel c if some tx0 sent m
+% earlier and no tx1 sent m1 /= m in the interim.
+pull(t, rx, c, m) : bool =
+    hasClock(t, rx)
+  AND
+    EXISTS (tx0:Proc), (t0:Time), c :
+        outMsg(t0, tx0, c) = m
+      AND t0 < t
+      AND
+        FORALL (tx1:Proc), (t1:Time) :
+        EXISTS (m1:Msg) :
+               outMsg(t1, tx1, c) = m1
+             AND t1 < t AND t0 < t1
+           IMPLIES m = m1
+
+% push semantics: rx gets message m at time t on channel c if tx0 sent m at t
+% and no tx1 sent m1 / m at t, too. (For push semantics, we assume that
+% logically, there is no delay in sending and receiving).
+push(t, rx, c, m) : bool =
+    noClock(rx)
+  AND
+    EXISTS (tx0:Proc), c :
+        outMsg(t, tx0, c) = m
+      AND
+        FORALL (tx1:Proc), (t1:Time) :
+        EXISTS (m1:Msg) :
+               outMsg(t1, tx1, c) = m1
+           IMPLIES m = m1
+
+% Transitions in the system progress according to rounds, where each round is a
+% global time at which one or more events occurs. rnd computes the state update
+% for an individual process upon receiving a message (if no messages is
+% received---i.e., m = nullMsg---then the state is not updated.  Note that we
+% don't need to model explicitly outMsg or receiving environmental messages;
+% they are captured by our axioms.
+rnd(v, rx) : RECURSIVE State =
+    IF v = 0 THEN stateInit
+    ELSE foldStates(rnd(v-1, rx), rx, f)
+      WHERE
+      f = LAMBDA (c0 : InChan(rx)), s :
+            update(rx, s, inMsg(t, rx, c0))
+    ENDIF
+    WHERE t = fromEvent(v)
+  MEASURE v
+
+% Global run.
+run(v) : GlobalState =
+  LAMBDA rx : rnd(v, rx)
+
+% --------------------------------------
+% AXIOMS
+% --------------------------------------
+
+fold_AX : AXIOM
+  foldStates(s, rx, LAMBDA (c0 : InChan(rx)), s : s) = s
+
+% The state does not update upon receiving a null message.
+stutterState_AX : AXIOM
+  update(rx, s, nullMsg) = s
+
+% Messages are only received if either a push or pull event occurs.
+inMsg_AX : AXIOM
+    inMsg(t, rx, c) = m
+  IFF
+      pull(t, rx, c, m)
+    OR
+      push(t, rx, c, m)
+
+% A process only receives events at a calendar event.
+completeEvents_AX : AXIOM
+  FORALL (t : { t |   t > fromEvent(v)
+                  AND t < fromEvent(v+1)
+              }) :
+    inMsg(fromEvent(v), rx, c) = nullMsg
+
+stutterState_LEM : LEMMA
+          (FORALL c : (nullMsg = inMsg(fromEvent(v), rx, c)))
+  IMPLIES (v = 0 OR rnd(v, rx) = rnd(v-1, rx))
+
+END semantics
