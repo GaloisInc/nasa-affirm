@@ -57,6 +57,7 @@ inMsg(t, rx, c) : Msg
 
 % The inbound channels of rx.
 inChan(rx) : pred[Chan]
+% Helper
 InChan(rx) : Type = { c | inChan(rx)(c) }
 
 % State update function for a process.
@@ -67,8 +68,10 @@ update(rx, s, m) : State
 foldStates(s, rx, (f:[InChan(rx), State -> State])): State
 
 % --------------------------------------
-% Defined functions
+% Defined
 % --------------------------------------
+
+toEvent(t) : Event = floor(t)
 
 hasClock(t, rx) : bool =
   EXISTS e :
@@ -80,32 +83,32 @@ noClock(rx) : bool =
 
 % pull semantics: rx gets message m at time t on channel c if some tx0 sent m
 % earlier and no tx1 sent m1 /= m in the interim.
-pull(t, rx, c, m) : bool =
+pull(t, rx, c) : bool =
     hasClock(t, rx)
   AND
-    EXISTS (tx0:Proc), (t0:Time), c :
-        outMsg(t0, tx0, c) = m
+    EXISTS (tx0:Proc), (t0:Time):
+        outMsg(t0, tx0, c) = inMsg(t, rx, c)
       AND t0 < t
       AND
         FORALL (tx1:Proc), (t1:Time) :
         EXISTS (m1:Msg) :
                outMsg(t1, tx1, c) = m1
              AND t1 < t AND t0 < t1
-           IMPLIES m = m1
+           IMPLIES inMsg(t, rx, c) = m1
 
 % push semantics: rx gets message m at time t on channel c if tx0 sent m at t
 % and no tx1 sent m1 / m at t, too. (For push semantics, we assume that
 % logically, there is no delay in sending and receiving).
-push(t, rx, c, m) : bool =
+push(t, rx, c) : bool =
     noClock(rx)
   AND
-    EXISTS (tx0:Proc), c :
-        outMsg(t, tx0, c) = m
+    EXISTS (tx0:Proc):
+        outMsg(t, tx0, c) = inMsg(t, rx, c)
       AND
-        FORALL (tx1:Proc), (t1:Time) :
+        FORALL (tx1:Proc) :
         EXISTS (m1:Msg) :
-               outMsg(t1, tx1, c) = m1
-           IMPLIES m = m1
+               outMsg(t, tx1, c) = m1
+           IMPLIES inMsg(t, rx, c) = m1
 
 % Transitions in the system progress according to rounds, where each round is a
 % global time at which one or more events occurs. rnd computes the state update
@@ -140,11 +143,11 @@ stutterState_AX : AXIOM
 
 % Messages are only received if either a push or pull event occurs.
 inMsg_AX : AXIOM
-    inMsg(t, rx, c) = m
-  IFF
-      pull(t, rx, c, m)
-    OR
-      push(t, rx, c, m)
+    pull(t, rx, c)
+  OR
+    push(t, rx, c)
+  OR
+    inMsg(t, rx, c) = nullMsg
 
 % A process only receives events at a calendar event.
 completeEvents_AX : AXIOM
@@ -158,3 +161,38 @@ stutterState_LEM : LEMMA
   IMPLIES (v = 0 OR rnd(v, rx) = rnd(v-1, rx))
 
 END semantics
+
+semantics_interp: THEORY
+BEGIN
+
+IMPORTING semantics
+
+% 2 processes and one channel that each process can read. All messages are clock
+% potential messages. Each process sends its state+1 on the channel. Every
+% process gets a clock signal on the naturals.
+
+Proc : TYPE = {n:nat | n >= 0 AND n <= 1}
+Chan : TYPE = {n:nat | n = 0 }
+Msg  : Type = nat
+
+IMPORTING semantics
+  {{ Env        := nat
+   , Chan       := Chan
+   , Msg        := Msg
+   , nullMsg    := 0
+   , clkMsg     := LAMBDA (m:nat) : TRUE
+   , Proc       := Proc
+   , State      := nat
+   , stateInit  := 0
+   , globalInit := LAMBDA (p:nat) : 0
+   , fromEvent  := LAMBDA (v:nat) : v
+   , envMsg     := LAMBDA (t:Time, rx:Proc, e:nat) : IF t = floor(t) THEN floor(t) ELSE 0 ENDIF
+   , outMsg     := LAMBDA (t:Time, tx:Proc, c:Chan) : 0
+   , inMsg      := LAMBDA (t:Time, rx:Proc, c:Chan) : 0
+   , inChan     := LAMBDA (rx:Proc) : LAMBDA (c:Chan) : rx = 1
+   , update     := LAMBDA (rx:Proc, s:nat, m:nat) : s
+   , foldStates := LAMBDA (s:nat, rx:Proc, f: [[{c:Chan | IF rx = 0 THEN FALSE ELSE TRUE ENDIF}], nat -> nat]) : s
+   }}
+
+
+END semantics_interp
