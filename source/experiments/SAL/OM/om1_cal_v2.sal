@@ -1,19 +1,34 @@
-% SAL model of OM(1)
+% SAL model of OM(1), version 2
 %
-% Features:
-%   * asyncronous message passing
-%   * channel automata
+% Oral Messages 1 algorithm
+%
+% ** WARNING ** may still contain bugs
+%
+% Notes:
+%   * more economical encoding of channels than v1
+%   * no faults are modeled
+%   * channels are modeled using a (nodes x nodes) matrix called a 'calendar' (an
+%     abuse of terminology since REAL time is not tracked)
+%   * all nodes in 'system' are composed asynchronously
+%   * main properties are specified using synchronous observer 'observer'
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
-om1_cal: CONTEXT =
+om1_cal_v2: CONTEXT =
 BEGIN
 
 
-%--- Nodes and IDs --------------------------------------------------
+%--- Parameters -----------------------------------------------------
 
+% These parameters control the size of the system. Basic verification is
+% tractable when n <= 3 and k <= 2. At this size, SAL reports number of system
+% variables: 122, number of auxiliary variables: 20
+%
 n: NATURAL = 3;  % num relays
-k: NATURAL = 3;  % num receivers
+k: NATURAL = 2;  % num receivers
+
+
+%--- Nodes and IDs --------------------------------------------------
 
 % IDs for nodes
 nodes: TYPE = [0..n+k+1];  % n relays, k receivers, 1 source, 1 vote procedure
@@ -34,6 +49,7 @@ receivers: TYPE = [n+1..n+k];
 is_source?(i: nodes):   BOOLEAN = i = source_id;
 is_relay?(i: nodes):    BOOLEAN = relay_id_min <= i AND i <= relay_id_max;
 is_receiver?(i: nodes): BOOLEAN = receiver_id_min <= i AND i <= receiver_id_max;
+is_ivote?(i:nodes):     BOOLEAN = i = ivote_id;
 
 %--- Messages and Values --------------------------------------------
 
@@ -54,7 +70,7 @@ stack: TYPE = ARRAY receivers OF relay_vals;
 % type indexing channels between nodes
 channel_idx : TYPE = [nodes, nodes];
 
-% Channels defined in this particular model
+% the specific set of channels for this particular model
 channel_set : TYPE =
   { x:channel_idx | (x.1 = source_id   AND is_relay?(x.2))    OR
                     (is_relay?(x.1)    AND is_receiver?(x.2)) OR
@@ -77,9 +93,8 @@ channel_id(i: channel_set): channel_ids =
   ENDIF;
 
 % empty : no message present
-% transit : message in transit but not ready to be consumed
 % ready : message ready to be consumed
-channel_status : TYPE = {empty, transit, ready};
+channel_status : TYPE = {empty, ready};
 
 % channels data structure for communication between nodes. The structure
 % allows for at most 1 message to be sent from any node to any other
@@ -110,7 +125,7 @@ msg_read(cha: channels, i: channel_set): vals =
 
 % TODO: handle multiple concurrent messages from i -> j
 msg_send(cha: channels, i: channel_set, m:vals): channels =
-  cha WITH .chans[channel_id(i)] := ready  % TODO: transit
+  cha WITH .chans[channel_id(i)] := ready
       WITH .msgs[channel_id(i)]  := m;
 
 msg_consume(cha: channels, i: channel_set): channels =
@@ -137,11 +152,11 @@ msg_bcast_receivers(cha: channels, m: vals, r:relays): channels =
 % State Machine
 %----------------------------------------------------------------------
 
-% Notes:
+% The 'controller' is responsible for initialization of some global variables
+% and for providing 'source' with the content of its message.
 %
-% 'source_done', 'relays_done', etc... are for debugging and verification
+% Note: 'source_done', 'relays_done', etc... are modeling artifacts`
 %
-
 controller: MODULE =
 BEGIN
     GLOBAL
@@ -159,17 +174,15 @@ INITIALIZATION
     ivote_stack = [[p:receivers] [[i:relays] missing_v]]
 TRANSITION
     [
-      ELSE -->
-      % % prevents deadlock
-      % controller_else:
-      % source_done AND
-      %   (FORALL (i:relays): relays_done[i]) AND
-      %   (FORALL (r:receivers): receivers_done[r]) -->
-      %     % stutter
+      % prevent deadlock after the components finish
+      controller_else:
+      source_done AND
+        (FORALL (i:relays): relays_done[i]) AND
+        (FORALL (r:receivers): receivers_done[r]) -->
     ]
 END;
 
-% 'source' sends a message (s_in) to all relays
+% Module 'source' represents the General, it sends a message (s_in) to all relays
 source: MODULE =
 BEGIN
     GLOBAL cha: channels
@@ -186,6 +199,7 @@ TRANSITION
     ]
 END;
 
+% Each relay broadcasts the message it receives to all the receiveres.
 relay[i: relays]: MODULE =
 BEGIN
     GLOBAL cha: channels
@@ -208,6 +222,8 @@ END;
 % wait_vote  means waiting on the ivote machine to return an answer
 receiver_modes: TYPE = {wait_relay, wait_vote, done};
 
+% Each receiver collects messages it receives from the relays and, when it has
+% them all, calls the 'ivote' function to compute a majority vote.
 receiver[p:receivers]: MODULE =
 BEGIN
     GLOBAL
@@ -263,6 +279,8 @@ ivote_pc_range: TYPE = [0..100];  % ??? compute at compile time
 ivote_input_size: INTEGER = n;
 ivote_ix_range: TYPE = [0..ivote_input_size];
 
+% Module 'ivote' models the Ivory function computing a fast majority vote over
+% an array.
 ivote: MODULE =
 BEGIN
     GLOBAL cha : channels
@@ -383,26 +401,55 @@ TRANSITION
       (FORALL (i:relays): relays_done[i]) AND
       (FORALL (r:receivers): receivers_done[r]) -->
         not_done' = FALSE
+  []
+    % prevent deadlock of the observer
+    ELSE -->
   ]
 END;
 
-system_observer: MODULE = system || observer;
+system_obs: MODULE = system || observer;
 
-%--- Verification ---------------------------------------------------
 
-vaa: THEOREM (system || observer) |- G(vaa_ok);
+%--------------------------------------------------------------------
+%  Verification
+%--------------------------------------------------------------------
 
-%% Tests
+%---  Main Theorems  ---
 
-% relays finish eventually: sal-smc proved
-relays_test: THEOREM system |- F(FORALL (i:relays): relays_done[i]);
+% system eventually finishes (at which point vaa can be checked).
+% Alternatively, the safety property 'not_all_done' listed below can be
+% checked for counterexamples with bmc.
+%   n = 3, k = 2: sal-smc om1_cal_v1 finish
+%                 XXX proved (16.1 s)
+%                 XXX sal-deadlock-checker om1_cal_v1 OK
+finish: THEOREM system_obs |- F(NOT not_done);
 
-% ivote gets called eventually: sal-smc proved
-ivote_busy: THEOREM system |- F((NOT ivote_busy) AND F(ivote_busy));
-ivote_busy_next: THEOREM system |- F((NOT ivote_busy) AND X(ivote_busy));
+% validity and agreement hold when the system is "done"
+%   BDDs n = 3, k = 2: sal-smc om1_cal_v1 vaa
+%                      proved (16.7 secs)
+%                      sal-bmc -d 50 om1_cal_v1 vaa
+%                      no counterexamples (169 secs)
+vaa: THEOREM system_obs |- G(vaa_ok);
+
+
+%--- Invariants ---
+
+% TODO
+
+%--- Tests for bounded model checker; these are non-THEOREMS  ---
+
+% components finish eventually:
+%   n=2, k=3: counter-ex depth 1
+source_test:    THEOREM system_obs |- G(NOT source_done);
+%   n=2, k=3: counter-ex depth 8
+relays_test:    THEOREM system_obs |- G(NOT FORALL (i:relays): relays_done[i]);
+%   n=2, k=3: counter-ex depth gg
+receivers_test: THEOREM system_obs |- G(NOT FORALL (i:receivers): receivers_done[i]);
 
 % everyone finishes eventually:
-all_done: THEOREM (system || observer) |- F(NOT not_done);
-not_all_done: THEOREM (system || observer) |- G(not_done);
+%   n=2, k=2: counterexample depth 
+%   n=3, k=2: counterexample depth 
+%   n=3, k=3: counterexample depth 
+not_all_done: THEOREM system_obs |- G(not_done);
 
 END
