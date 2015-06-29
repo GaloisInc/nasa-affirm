@@ -5,16 +5,17 @@ PWD=$(shell pwd)
 PACKAGES= \
   $(PREFIX)/ivory/ivory/ \
   $(PREFIX)/ivory/ivory-artifact/ \
+  $(PREFIX)/ivory/ivory-backend-c/ \
   $(PREFIX)/ivory/ivory-stdlib/ \
   $(PREFIX)/ivory/ivory-serialize/ \
   $(PREFIX)/ivory/ivory-opts/ \
-  $(PREFIX)/ivory/ivory-backend-c/ \
   $(PREFIX)/tower/tower/ \
+  $(PREFIX)/tower/tower-config \
   $(PREFIX)/tower/tower-aadl/
 
-all: run
+all: add-srcs
 
-run: add-srcs
+run_om: add-srcs
 	cabal exec runghc OM.hs
 
 run_omso: add-srcs
@@ -24,7 +25,7 @@ run_omso: add-srcs
 add-srcs:
 	cabal sandbox init
 	cabal sandbox add-source $(PACKAGES)
-	cabal install $(PACKAGES)
+	cabal install tower-aadl
 
 .PHONY: clean
 clean:

@@ -1,21 +1,33 @@
--- {-# LANGUAGE DataKinds #-}
--- {-# LANGUAGE ScopedTypeVariables #-}
--- {-# LANGUAGE QuasiQuotes #-}
--- {-# LANGUAGE RecordWildCards #-}
--- {-# LANGUAGE QuasiQuotes #-}
--- {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleInstances #-}
 
--- {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
--- module Main where
+module Main where
 
--- import Ivory.Tower
--- import Ivory.Language
--- import Tower.AADL
+import Control.Monad
 
---------------------------------------------------------------------------------
+import Ivory.Tower
+import Ivory.Language
+import Tower.AADL
 
-```
+----------------------------------------
+
+type Signal = Bool
+
+maxCnt = 3
+
+data Signal = Signal Bool
+
+
+
+----------------------------------------
+
+
 pushButton :: Tower e ()
 pushButton = do
 
@@ -37,10 +49,8 @@ pushButton = do
   -- From B to A
   (comBTx, comARx) <- channel
 
-```
---------------------------------------------------------------------------------
+----------------------------------------
 
-```
   monitor "A_COM" $ do
     st <- state "selected_mode" :: Signal
     active <- stateInit "active" True
@@ -51,7 +61,7 @@ pushButton = do
     -- Handle my monitor's yield request
     handler monComARx "fromMon" $ do
       e <- emitter comATx 1
-      callback $ \msg -> dp
+      callback $ \msg ->
         store active False
         -- Send a yield request to B
         when (not msg) (emit e msg)
@@ -60,11 +70,10 @@ pushButton = do
     handler perClkA "clk" $ do
       e <- emitter comMonATx 1
       callback $ \_ -> emit e st
-```
 
---------------------------------------------------------------------------------
 
-```
+----------------------------------------
+
   monitor "A_MON" $ do
     lm  <- state "local_mode"
     cm  <- state "com_mode"
@@ -84,15 +93,16 @@ pushButton = do
         if lm == cm
           then store cnt 0
           else store cnt (cnt+1)
-        if cnt >= MaxCnt
+        if cnt >= maxCnt
           -- Report disagreement
-          then emit e Yield
-```
+--          then emit e Yield
+          then emit e undefined
+          else undefined
 
---------------------------------------------------------------------------------
 
-```
-handleButton st lo med max =
+----------------------------------------
+
+handleButton st lo med max = do
   -- Handle the button signals
   -- XXX collapse into one handler?
   handler lo   "low" $ do
@@ -101,4 +111,4 @@ handleButton st lo med max =
     callback $ \msg -> store st msg
   handler max "max" $ do
     callback $ \msg -> store st msg
-```
+

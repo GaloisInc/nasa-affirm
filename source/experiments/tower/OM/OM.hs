@@ -196,8 +196,8 @@ type Constraints v =
 
 --------------------------------------------------------------------------------
 
--- Generate the AADL
-main :: IO ()
-main = runCompileAADL opts system
-  where
-  opts = initialOpts { genDirOpts = Just "AADL" }
+-- -- Generate the AADL
+-- main :: IO ()
+-- main = runCompileAADL opts system
+--   where
+--   opts = initialOpts { genDirOpts = Just "AADL" }

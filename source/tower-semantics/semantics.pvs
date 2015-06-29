@@ -73,18 +73,19 @@ foldStates(s, rx, (f:[InChan(rx), State -> State])): State
 
 toEvent(t) : Event = floor(t)
 
-hasClock(t, rx) : bool =
+% A clock event is tied to a channel.
+hasClock(t, rx, c) : bool =
   EXISTS e :
     clkMsg(envMsg(t, rx, e))
 
-noClock(rx) : bool =
+noClock(rx, c) : bool =
   FORALL t, e :
     NOT clkMsg(envMsg(t, rx, e))
 
 % pull semantics: rx gets message m at time t on channel c if some tx0 sent m
 % earlier and no tx1 sent m1 /= m in the interim.
 pull(t, rx, c) : bool =
-    hasClock(t, rx)
+    hasClock(t, rx, c)
   AND
     EXISTS (tx0:Proc), (t0:Time):
         outMsg(t0, tx0, c) = inMsg(t, rx, c)
@@ -100,7 +101,7 @@ pull(t, rx, c) : bool =
 % and no tx1 sent m1 / m at t, too. (For push semantics, we assume that
 % logically, there is no delay in sending and receiving).
 push(t, rx, c) : bool =
-    noClock(rx)
+    noClock(rx, c)
   AND
     EXISTS (tx0:Proc):
         outMsg(t, tx0, c) = inMsg(t, rx, c)
