@@ -80,19 +80,23 @@ noClock(rx, c) : bool =
     NOT clkMsg(envMsg(t, rx, e))
 
 % pull semantics: rx gets message m at time t on channel c if some tx0 sent m
-% earlier and no tx1 sent m1 /= m in the interim.
+% earlier, and its the last message in the queue.
 pull(t, rx, c) : bool =
     hasClock(t, rx, c)
   AND
     EXISTS (tx0:Proc), (t0:Time):
         outMsg(t0, tx0, c) = inMsg(t, rx, c)
       AND t0 < t
-      AND
-        FORALL (tx1:Proc), (t1:Time) :
-        EXISTS (m1:Msg) :
-               outMsg(t1, tx1, c) = m1
-             AND t1 < t AND t0 < t1
-           IMPLIES inMsg(t, rx, c) = m1
+      AND NOT
+        EXISTS (tx1:Proc), (t1:Time), (m1:Msg) :
+				      t1 < t0
+					AND outMsg(t1, tx1, c) = m1
+					AND m1 /= inMsg(t, rx, c)
+					AND m1 /= nullMsg
+					AND FORALL (t2 : Time) :
+						        t2 < t0
+  					    AND t1 < t2
+                AND inMsg(t2, rx, c) /= m1
 
 % push semantics: rx gets message m at time t on channel c if tx0 sent m at t
 % and no tx1 sent m1 / m at t, too. (For push semantics, we assume that
@@ -102,11 +106,11 @@ push(t, rx, c) : bool =
   AND
     EXISTS (tx0:Proc):
         outMsg(t, tx0, c) = inMsg(t, rx, c)
-      AND
-        FORALL (tx1:Proc) :
-        EXISTS (m1:Msg) :
-               outMsg(t, tx1, c) = m1
-           IMPLIES inMsg(t, rx, c) = m1
+      AND NOT
+        EXISTS (tx1:Proc), (m1:Msg) :
+              outMsg(t, tx1, c) = m1
+				  AND m1 /= nullMsg
+					AND inMsg(t, rx, c) = m1
 
 % Transitions in the system progress according to rounds, where each round is a
 % global time at which one or more events occurs. rnd computes the state update
