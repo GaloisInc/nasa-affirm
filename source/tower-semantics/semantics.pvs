@@ -24,10 +24,9 @@ stateInit   : State
 GlobalState : Type = [Proc -> State]
 globalInit  : GlobalState
 
-Time   : Type = { r:real | r >= 0 }
-
 % An event is unique in the system. Events are points in time (e.g., calendars)
 % at which one or more system events occurs.
+Time   : Type = { r:real | r >= 0 }
 Event  : Type = nat
 
 c     : VAR Chan
@@ -70,8 +69,6 @@ foldStates(s, rx, (f:[InChan(rx), State -> State])): State
 % --------------------------------------
 % Defined
 % --------------------------------------
-
-toEvent(t) : Event = floor(t)
 
 % A clock event is tied to a channel.
 hasClock(t, rx, c) : bool =
@@ -134,6 +131,10 @@ run(v) : GlobalState =
 % --------------------------------------
 % AXIOMS
 % --------------------------------------
+
+fromEvent_AX : AXIOM
+  FORALL (v0 : Event, v1 : Event) :
+	  v0 <= v1 IMPLIES fromEvent(v0) <= fromEvent(v1)
 
 fold_AX : AXIOM
   foldStates(s, rx, LAMBDA (c0 : InChan(rx)), s : s) = s
