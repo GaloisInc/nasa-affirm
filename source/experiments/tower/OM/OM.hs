@@ -27,7 +27,7 @@ import           Tower.AADL
 --------------------------------------------------------------------------------
 
 -- Compose the system
-system :: Tower () ()
+system :: Tower e ()
 system = do
   -- Make the general channel endpoints. The lieutenants share genRx.
   (genTx, genRx) <- channel
@@ -54,7 +54,7 @@ general v per tx = do
 lieutenants
   :: Constraints v
   => ChanOutput (Stored v)
-  -> Tower () ()
+  -> Tower e ()
 lieutenants genRx = do
   -- Replicate three channels.
   chans <- replicateM 3 channel
@@ -196,8 +196,8 @@ type Constraints v =
 
 --------------------------------------------------------------------------------
 
--- -- Generate the AADL
--- main :: IO ()
--- main = runCompileAADL opts system
---   where
---   opts = initialOpts { genDirOpts = Just "AADL" }
+main :: IO ()
+main = do
+  compileTowerAADL id p system
+  where
+  p _ = return defaultAADLConfig

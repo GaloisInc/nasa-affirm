@@ -11,15 +11,16 @@ PACKAGES= \
   $(PREFIX)/ivory/ivory-opts/ \
   $(PREFIX)/tower/tower/ \
   $(PREFIX)/tower/tower-config \
-  $(PREFIX)/tower/tower-aadl/
+  $(PREFIX)/tower/tower-aadl/ \
+  $(PREFIX)/ivory-tower-posix/
 
 all: add-srcs
 
-run_om: add-srcs
-	cabal exec runghc OM.hs
+run_om:
+	cabal exec runghc OM/OM.hs -- --src-dir=om_aadl
 
-run_omso: add-srcs
-	cabal exec runghc OMSO.hs
+# run_omso: add-srcs
+# 	cabal exec runghc OMSO.hs
 
 .PHONY: add-srcs
 add-srcs:
