@@ -16,13 +16,12 @@
 
 --------------------------------------------------------------------------------
 
-module Main where
+module OM where
 
 import           Control.Monad hiding (when, forever)
 import           Ivory.Language
 import           Ivory.Stdlib
 import           Ivory.Tower
-import           Tower.AADL
 
 --------------------------------------------------------------------------------
 
@@ -196,8 +195,3 @@ type Constraints v =
 
 --------------------------------------------------------------------------------
 
-main :: IO ()
-main = do
-  compileTowerAADL id p system
-  where
-  p _ = return defaultAADLConfig
