@@ -159,10 +159,11 @@
     (>= const-decl "bool" reals nil)
     (nat nonempty-type-eq-decl nil naturalnumbers nil)
     (Proc type-eq-decl nil semantics_interp nil)
-    (= const-decl "[T, T -> boolean]" equalities nil)
     (Chan type-eq-decl nil semantics_interp nil)
+    (= const-decl "[T, T -> boolean]" equalities nil)
     (real_le_is_total_order name-judgement "(total_order?[real])"
-     real_props nil))
+     real_props nil)
+    (/= const-decl "boolean" notequal nil))
    nil))
  (IMP_semantics_Chan_nonempty_TCC1 0
   (IMP_semantics_Chan_nonempty_TCC1-1 nil 3642348292
@@ -206,42 +207,10 @@
    shostak))
  (IMP_semantics_fromEvent_AX_TCC1 0
   (IMP_semantics_fromEvent_AX_TCC1-1 nil 3645338691
-   ("" (mapped-axiom-tcc) nil nil)
-   ((boolean nonempty-type-decl nil booleans nil)
-    (bool nonempty-type-eq-decl nil booleans nil)
-    (NOT const-decl "[bool -> bool]" booleans nil)
-    (number nonempty-type-decl nil numbers nil)
-    (number_field_pred const-decl "[number -> boolean]" number_fields
-     nil)
-    (number_field nonempty-type-from-decl nil number_fields nil)
-    (real_pred const-decl "[number_field -> boolean]" reals nil)
-    (real nonempty-type-from-decl nil reals nil)
-    (>= const-decl "bool" reals nil)
-    (rational_pred const-decl "[real -> boolean]" rationals nil)
-    (rational nonempty-type-from-decl nil rationals nil)
-    (integer_pred const-decl "[rational -> boolean]" integers nil)
-    (int nonempty-type-eq-decl nil integers nil)
-    (nat nonempty-type-eq-decl nil naturalnumbers nil)
-    (= const-decl "[T, T -> boolean]" equalities nil)
-    (Chan type-eq-decl nil semantics_interp nil)
-    (Msg type-eq-decl nil semantics_interp nil)
-    (TRUE const-decl "bool" booleans nil)
-    (<= const-decl "bool" reals nil)
-    (Proc type-eq-decl nil semantics_interp nil)
-    (restrict const-decl "R" restrict nil)
-    (Time type-eq-decl nil semantics nil)
-    (IF const-decl "[boolean, T, T -> T]" if_def nil)
-    (integer nonempty-type-from-decl nil integers nil)
-    (AND const-decl "[bool, bool -> bool]" booleans nil)
-    (< const-decl "bool" reals nil)
-    (numfield nonempty-type-eq-decl nil number_fields nil)
-    (+ const-decl "[numfield, numfield -> numfield]" number_fields nil)
-    (floor const-decl "{i | i <= x & x < i + 1}" floor_ceil nil)
-    (FALSE const-decl "bool" booleans nil)
-    (Event type-eq-decl nil semantics nil))
-   nil))
+   ("" (mapped-axiom-tcc) nil nil) nil nil))
  (IMP_semantics_fold_AX_TCC1 0
-  (IMP_semantics_fold_AX_TCC1-1 nil 3642346111 ("" (tcc)) nil nil))
+  (IMP_semantics_fold_AX_TCC1-1 nil 3646072805
+   ("" (mapped-axiom-tcc) nil nil) nil nil))
  (IMP_semantics_inMsg_AX_TCC1 0
   (IMP_semantics_inMsg_AX_TCC1-1 nil 3642346111
    ("" (mapped-axiom-tcc) nil nil) nil shostak)))
