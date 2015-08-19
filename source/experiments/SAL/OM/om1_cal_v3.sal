@@ -72,47 +72,38 @@ recv_vals:  TYPE = ARRAY RECEIVERS OF MESSAGE;
 stack: TYPE = ARRAY RECEIVERS OF relay_vals;
 
 %TIME: TYPE = REAL;
-TIME: TYPE = [-1..2];
-invalid_time: TIME = -1;
 %msg_delay: { t: TIME | 0.9 < t AND t < 1.0 };
+TIME: TYPE = [-1..10];
+invalid_time: TIME = -1;
 msg_delay: TIME = 1;
 
-%--- Calendar Automata ----------------------------------------------
 
+%
+%--- Calendar Automata ----------------------------------------------
+%
 % Calendar data structure for communication between nodes. The structure
 % allows for at most 1 message to be sent from any node to any other
 % at a given time.
 %
-% e.g.
-% full?(cal, i, j) = indicates if the mailbox for i -> j is full (message pending)
-%
 CALENDAR: TYPE =
-  [# full?    : ARRAY PAIRS of BOOLEAN,  % is a message pending?
-     msg      : ARRAY PAIRS of MESSAGE,  % contents of message
-     sent     : ARRAY PAIRS of TIME,     % time of sending
+  [# msg      : ARRAY PAIRS of MESSAGE,  % contents of message
      delivery : ARRAY PAIRS of TIME      % time for delivery
   #];
 
 empty_calendar: CALENDAR =
-  (# full?    := [[ij:PAIRS] false],
-     msg      := [[ij:PAIRS] missing_v],
-     sent     := [[ij:PAIRS] invalid_time],
+  (# msg      := [[ij:PAIRS] missing_v],
      delivery := [[ij:PAIRS] invalid_time]
   #);
 
 null?(cal:CALENDAR, i:IDENTITY, j:IDENTITY): BOOLEAN =
-  NOT cal.full?[mkPair(i,j)]                 AND
   cal.msg[mkPair(i,j)] = missing_v           AND
-  cal.sent[mkPair(i,j)] = invalid_time       AND
   cal.delivery[mkPair(i,j)] = invalid_time;
 
 % Helper functions for getting/setting the calendar
 full?(cal: CALENDAR, i:IDENTITY, j:IDENTITY): BOOLEAN =
-  cal.full?[mkPair(i,j)];
+  cal.msg[mkPair(i,j)] /= missing_v;
 msg(cal: CALENDAR, i:IDENTITY, j:IDENTITY): MESSAGE =
   cal.msg[mkPair(i,j)];
-sent(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
-  cal.sent[mkPair(i,j)];
 delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
   cal.delivery[mkPair(i,j)];
 
@@ -125,37 +116,16 @@ is_yet_event?(cal:CALENDAR, t:TIME): BOOLEAN =
   (EXISTS (i,j:IDENTITY):
       node_event?(cal, i, j, t));
 
-TIMEOUTS: TYPE = ARRAY IDENTITY of TIME;
-
-timeout_min_recur(x:TIMEOUTS, m:TIME, i:IDENTITY): TIME =
-  IF i = -1 THEN
-    m
-  ELSE
-    timeout_min_recur(x, min(m, x[i]), i-1)
-  ENDIF;
-
-timeout_min(x:TIMEOUTS): TIME =
-  timeout_min_recur(x, x[num_nodes-1], num_nodes-2);
-
 % Return the time of the next scheduled event, returns 'invalid_time' in case
 % the calendar is empty.
+
 is_next_time(cal:CALENDAR, t:TIME): BOOLEAN =
   (FORALL (i,j:IDENTITY): full?(cal,i,j) => t <= delivery(cal,i,j)) AND
   (EXISTS (i,j:IDENTITY): full?(cal,i,j) AND t = delivery(cal,i,j));
 
-%  timeout_min([[i:IDENTITY]
-%    timeout_min([[j:IDENTITY]
-%      IF full?(cal,i,j) THEN
-%        delivery(cal,i,j)
-%      ELSE
-%        invalid_time
-%      ENDIF])]);
-
 % send a message with given delay
 msg_send_delta(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME, d:TIME): CALENDAR =
-  cal WITH .full?[mkPair(i,j)]    := TRUE
-      WITH .msg[mkPair(i,j)]      := m
-      WITH .sent[mkPair(i,j)]     := t
+  cal WITH .msg[mkPair(i,j)]      := m
       WITH .delivery[mkPair(i,j)] := t + d;
 
 % default msg_send function has 'msg_delay' delay
@@ -167,23 +137,18 @@ msg_send_instant(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME): CAL
   msg_send_delta(cal,i,j,m,t,0);
 
 msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
-  cal WITH .full?[mkPair(i,j)] := FALSE
-      WITH .msg[mkPair(i,j)]   := missing_v;
+  cal WITH .msg[mkPair(i,j)] := missing_v;
 
 % Broadcast a message from the source to all the relays
 msg_bcast_relays(cal: CALENDAR, m: MESSAGE, t:TIME): CALENDAR =
   LET isr:[PAIRS->BOOLEAN] = LAMBDA (p:PAIRS): is_source?(unPair(p).1) AND is_relay?(unPair(p).2) IN
-    cal WITH .full? := [[p:PAIRS] IF isr(p) THEN TRUE ELSE cal.full?[p] ENDIF]
-        WITH .msg   := [[p:PAIRS] IF isr(p) THEN m    ELSE cal.msg[p] ENDIF]
-        WITH .sent  := [[p:PAIRS] IF isr(p) THEN t    ELSE cal.sent[p] ENDIF]
+    cal WITH .msg   := [[p:PAIRS] IF isr(p) THEN m    ELSE cal.msg[p] ENDIF]
         WITH .delivery := [[p:PAIRS] IF isr(p) THEN t + msg_delay ELSE cal.delivery[p] ENDIF];
 
 % Broadcast a message from relay 'r' to all receivers
 msg_bcast_receivers(cal: CALENDAR, m: MESSAGE, r:RELAYS, t:TIME): CALENDAR =
   LET irr:[PAIRS->BOOLEAN] = LAMBDA (p:PAIRS): r = unPair(p).1 AND is_receiver?(unPair(p).2) IN
-    cal WITH .full? := [[p:PAIRS] IF irr(p) THEN TRUE ELSE cal.full?[p] ENDIF]
-        WITH .msg   := [[p:PAIRS] IF irr(p) THEN m    ELSE cal.msg[p] ENDIF]
-        WITH .sent  := [[p:PAIRS] IF irr(p) THEN t    ELSE cal.sent[p] ENDIF]
+    cal WITH .msg   := [[p:PAIRS] IF irr(p) THEN m    ELSE cal.msg[p] ENDIF]
         WITH .delivery := [[p:PAIRS] IF irr(p) THEN t + msg_delay ELSE cal.delivery[p] ENDIF];
 
 %----------------------------------------------------------------------
@@ -220,12 +185,7 @@ TRANSITION
       advance_time:
         NOT is_yet_event?(cal, t) --> t' IN { s:TIME | is_next_time(cal,s) }
       []
-      % prevent deadlock after the components finish
-      controller_else:
-        source_done AND
-          (FORALL (i:RELAYS): relays_done[i]) AND
-          (FORALL (r:RECEIVERS): receivers_done[r]) -->
-            % stutter
+        ELSE -->
     ]
 END;
 
@@ -509,7 +469,7 @@ relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
 %   n = k = 3: counter-ex depth 46
 receivers_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
 %
-time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
+time_test: THEOREM system |- G(t < 1);  % for msg_delay = 1 this implies we
                                          % advance to the receivers
 % test to see if ivote is ever called
 ivote_test: THEOREM system |- G(NOT ivote_busy);
