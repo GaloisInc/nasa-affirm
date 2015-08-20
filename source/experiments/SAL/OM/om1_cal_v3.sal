@@ -1,41 +1,43 @@
 % SAL model of OM(1)
 %
 % Oral Messages 1 algorithm
+% version 3b
 %
 % Notes:
-%   * no faults are modeled
-%   * channels are modeled using a (IDENTITY x IDENTITY) matrix called a 'calendar' (an
-%     abuse of terminology since REAL time is not tracked)
+%   * communication is modeled through a REAL time clock module and a
+%     calendar automata that keeps track of messages and delivery times
 %   * all nodes in 'system' are composed asynchronously
 %   * main properties are specified using synchronous observer 'observer'
+%   * no faults are modeled
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
-
-om1_cal_v3{; n: NATURAL, k: NATURAL}: CONTEXT =
-BEGIN
 
 
 %--- Parameters -----------------------------------------------------
 
 % These parameters control the size of the system. Basic verification is
-% tractable when n <= 3 and k <= 2. At this size, SAL reports number of system
-% variables: 262, number of auxiliary variables: 20
+% tractable when n <= 3 and k <= 2.
 %
 % n: NATURAL = 3;  % num relays
 % k: NATURAL = 2;  % num receivers
 
-% Parameters 'n' and 'k' are now CONTEXT parameters
+om1_cal_v3{; n: NATURAL, k: NATURAL}: CONTEXT =
+BEGIN
+
 
 %--- Nodes and IDs --------------------------------------------------
 
 % IDs for nodes
 IDENTITY:  TYPE     = [0..n+k+1];  % n relays, k receivers, 1 source, 1 vote procedure
+num_nodes: NATURAL  = n+k+2;
+
 source_id: IDENTITY = 0;
 ivote_id:  IDENTITY = n+k+1;
-num_nodes: NATURAL  = n+k+2;
+
 % Flat array for pairs of nodes
 num_pairs: NATURAL  = num_nodes*num_nodes;
 PAIRS: TYPE = [0..num_pairs-1];
+
 % encode pairs of bounded integers
 mkPair(i: IDENTITY, j:IDENTITY): PAIRS = i*num_nodes + j;
 unPair(p: PAIRS): [IDENTITY, IDENTITY] = (p DIV num_nodes, p MOD num_nodes);
@@ -71,10 +73,12 @@ recv_vals:  TYPE = ARRAY RECEIVERS OF MESSAGE;
 % call stacks for 'ivote'
 stack: TYPE = ARRAY RECEIVERS OF relay_vals;
 
-%TIME: TYPE = REAL;
-%msg_delay: { t: TIME | 0.9 < t AND t < 1.0 };
-TIME: TYPE = [-1..10];
+% Time is modeled by non-negative integers 
+% -1 is reserved as an invalid time
+% -2 is reserved as an atomic "out-of-band" time
+TIME: TYPE = [-2..10];
 invalid_time: TIME = -1;
+atomic_time: TIME = -2;
 msg_delay: TIME = 1;
 
 
@@ -432,23 +436,15 @@ system_obs : MODULE = system || observer;
 % system eventually finishes (at which point vaa can be checked).
 % Alternatively, the safety property 'not_all_done' listed below can be
 % checked for counterexamples with bmc.
-%   n = 3, k = 2: sal-smc om1_cal_v1 finish
-%                 proved (16.1 s)
-%                 sal-deadlock-checker om1_cal_v1 OK
 finish: THEOREM system_obs |- F(NOT not_done);
 
 % validity and agreement hold when the system is "done"
-%   n=3, k=2:
-%   sal-inf-bmc --disable-traceability -d 40 om1_cal_v3.sal vaa
-%   (256.21s)
 vaa: THEOREM system_obs |- G(vaa_ok);
 
 
 %--- Invariants ---
 
 % unused channels are empty:
-%   n = 3, k = 2: sal-inf-bmc -i om1_cal_v1 l0
-%                 proved (4.6 secs)
 l0: LEMMA system_obs |- G(
     (FORALL (i:IDENTITY): null?(cal, i, source_id)) AND
     (FORALL (i:IDENTITY):
@@ -462,11 +458,8 @@ l0: LEMMA system_obs |- G(
 %--- Tests for bounded model checker; these are non-THEOREMS  ---
 
 % components finish eventually:
-%   n=k=3: counter-ex depth 1
 source_test:    THEOREM system |- G(NOT source_done);
-%   n = k = 3: counter-ex depth 9
 relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
-%   n = k = 3: counter-ex depth 46
 receivers_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
 %
 time_test: THEOREM system |- G(t < 1);  % for msg_delay = 1 this implies we
@@ -475,9 +468,6 @@ time_test: THEOREM system |- G(t < 1);  % for msg_delay = 1 this implies we
 ivote_test: THEOREM system |- G(NOT ivote_busy);
 
 % everyone finishes eventually:
-%   n = k = 2:    counterexample depth 28
-%   n = 3, k = 2: counterexample depth 33 (5.38 secs)
-%   n = k = 3:    counterexample depth 47
 not_all_done: THEOREM system_obs |- G(not_done);
 
 END
