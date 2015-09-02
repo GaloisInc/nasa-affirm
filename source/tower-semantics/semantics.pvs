@@ -138,7 +138,7 @@ run(v) : GlobalState =
 
 fromEvent_AX : AXIOM
   FORALL (v0 : Event, v1 : Event) :
-	  v0 <= v1 IMPLIES fromEvent(v0) <= fromEvent(v1)
+	  v0 <= v1 IFF fromEvent(v0) <= fromEvent(v1)
 
 fold_AX : AXIOM
   foldStates(s, rx, LAMBDA (c0 : InChan(rx)), s : s) = s
@@ -197,7 +197,7 @@ IMPORTING semantics
    , inMsg      := LAMBDA (t:Time, rx:Proc, c:Chan) : 0
    , inChan     := LAMBDA (rx:Proc) : LAMBDA (c:Chan) : rx = 1
    , update     := LAMBDA (rx:Proc, s:nat, m:nat) : s
-   , foldStates := LAMBDA (s:nat, rx:Proc, f: [[{c:Chan | IF rx = 0 THEN FALSE ELSE TRUE ENDIF}], nat -> nat]) : s
+   , foldStates := LAMBDA (s:nat, rx:Proc, f: [[{c:Chan | rx /= 0}], nat -> nat]) : s
    }}
 
 

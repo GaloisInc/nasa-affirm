@@ -1,0 +1,55 @@
+name:                om
+version:             0.1.0.0
+synopsis:            Oral Messages protocol in Tower.
+license:             BSD3
+license-file:        LICENSE
+author:              leepike
+maintainer:          leepike@galois.com
+copyright:           (c) Galois, Inc.
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     OM
+  other-extensions:    ScopedTypeVariables
+                     , DataKinds
+                     , RankNTypes
+                     , TypeOperators
+                     , TypeFamilies
+                     , QuasiQuotes
+                     , PostfixOperators
+                     , ConstraintKinds
+                     , RecordWildCards
+                     , FlexibleInstances
+  build-depends:       base >=4.7
+                     , ivory >=0.1
+                     , ivory-stdlib >=0.1
+                     , tower >=0.9
+                     , tower-aadl
+                     , ivory-backend-c >=0.1
+  hs-source-dirs:      om
+  default-language:    Haskell2010
+
+executable aadl
+  hs-source-dirs:   OM
+  main-is:          OM-AADL.hs
+  build-depends:    base >= 4.6
+                  , ivory >=0.1
+                  , ivory-stdlib >=0.1
+                  , tower >=0.9
+                  , tower-aadl
+                  , ivory-backend-c >=0.1
+                  , om
+  default-language: Haskell2010
+
+executable posix
+  hs-source-dirs:   OM
+  main-is:          OM-Posix.hs
+  build-depends:    base >= 4.6
+                  , ivory >=0.1
+                  , ivory-stdlib >=0.1
+                  , tower >=0.9
+                  , ivory-tower-posix
+                  , ivory-backend-c >=0.1
+                  , om
+  default-language: Haskell2010
