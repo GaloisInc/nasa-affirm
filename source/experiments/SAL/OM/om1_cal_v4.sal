@@ -4,7 +4,7 @@
 % version 4
 %
 % Notes:
-%   * fixed nodes n=3, k=3
+%   * static number of nodes: n=3, k=3
 %   * communication is modeled through a REAL time clock module and a
 %     calendar automata that keeps track of messages and delivery times
 %   * attempted to minimize number of state vars
@@ -44,8 +44,10 @@ is_receiver?(i: IDENTITY): BOOLEAN = 4 <= i AND i <= 6;
 %--- Channels -------------------------------------------------------
 
 % channel IDs
-%   1-3: source -> 3 relays
-%   4-6, 7-9, 10-12: relay -> 3 receivers
+%   1-3:   source -> 3 relays
+%   4-6:   relay 1 -> receivers
+%   7-9:   relay 2 -> receivers
+%   10-12: relay 3 -> receivers
 %   13-15: receiver -> self
 CHANNEL: TYPE = [1..15];
 
@@ -96,12 +98,12 @@ msg_delay: TIME = 1;
 % at a given time.
 %
 CALENDAR: TYPE =
-  [# msg      : ARRAY CHANNEL of MESSAGE,  % contents of message
+  [# msg  : ARRAY CHANNEL of MESSAGE,  % contents of message
      time : ARRAY CHANNEL of TIME      % time for delivery
   #];
 
 empty_calendar: CALENDAR =
-  (# msg      := [[c:CHANNEL] missing],
+  (# msg  := [[c:CHANNEL] missing],
      time := [[c:CHANNEL] invalid_time]
   #);
 
@@ -113,27 +115,30 @@ msg(cal: CALENDAR, i:IDENTITY, j:IDENTITY): MESSAGE =
 delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
   cal.time[chan(i,j)];
 
-% is there an atomic event pending?
-atomic_pending?(cal: CALENDAR): BOOLEAN =
-  (EXISTS (c:CHANNEL): cal.time[c] = atomic_time);
+% Is the given time the minimum among all valid times on the calendar?
+is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
+  (FORALL (c:CHANNEL): NOT null?(cal,c) => t <= cal.time[c]) AND
+  (EXISTS (c:CHANNEL): NOT null?(cal,c) AND t = cal.time[c]);
 
-% Is there an event i -> j yet to occur at the current time?
-% Returns FALSE if the pair i,j has no channel between them.
+% Is there an event i -> j yet to occur at the given time?
+% Returns FALSE if
+%
+%     A) the pair i,j has no channel between them OR
+%     B) there is a pending atomic event.
+%
 node_event?(cal:CALENDAR, i:IDENTITY, j:IDENTITY, t:TIME): BOOLEAN =
-  IF linked?(i,j) THEN
+  IF linked?(i,j) AND is_next_time?(cal,t) THEN
     msg(cal,i,j) /= missing AND delivery(cal,i,j) = t
   ELSE
     FALSE
   ENDIF;
 
-% is there an event yet to occur at the current time?
+% is there an event yet to occur at the given time?
 event_pending?(cal:CALENDAR, t:TIME): BOOLEAN =
   (EXISTS (c:CHANNEL): cal.msg[c] /= missing AND cal.time[c] = t);
 
-% Is the given time 't' the minimum among all valid times on the calendar?
-is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
-  (FORALL (c:CHANNEL): NOT null?(cal,c) => t <= cal.time[c]) AND
-  (EXISTS (c:CHANNEL): NOT null?(cal,c) AND t = cal.time[c]);
+% is there an atomic event pending?
+atomic_pending?(cal: CALENDAR): BOOLEAN = event_pending?(cal, atomic_time);
 
 % send a message with given delay
 msg_send_delta(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME, d:TIME): CALENDAR =
@@ -150,20 +155,19 @@ msg_send(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME): CALENDAR =
 msg_send_interrupt(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
   msg_send_delta(cal,i,j,good,atomic_time,0);
 
-
 msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
   cal WITH .msg[chan(i,j)]  := missing
       WITH .time[chan(i,j)] := invalid_time;
 
 
 %----------------------------------------------------------------------
-% State Machine
+% Transition System
 %----------------------------------------------------------------------
 
 %
-% The 'controller' module gives the general its message and manages the
+% The 'clock' module gives the general its message and manages the
 % advance of time.
-controller: MODULE =
+clock: MODULE =
 BEGIN
     GLOBAL
       cal: CALENDAR,
@@ -181,10 +185,9 @@ INITIALIZATION
 TRANSITION
     [
       advance_time:
-        NOT event_pending?(cal, t) --> t' IN { s:TIME | is_next_time?(cal,s) }
+        NOT is_next_time?(cal,t) --> t' IN { s:TIME | is_next_time?(cal,s) }
     []
-      % allow controller/clock to stutter in order to make deadlock checking
-      % trivial
+      % allow clock to stutter once the system reaches the end of one round
       stutter:
         source_done AND
         (FORALL (i:RELAYS): relays_done[i]) AND
@@ -335,7 +338,7 @@ END;
 
 % asyncronous composition is used to better model message passing
 system: MODULE =
-        controller
+        clock
      [] source
      [] (WITH OUTPUT relays_done: ARRAY RELAYS OF BOOLEAN
            ([] (x:RELAYS): RENAME relay_done TO relays_done[x] IN relay[x]))
