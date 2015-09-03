@@ -12,6 +12,10 @@
 %   * main properties are specified using synchronous observer 'observer'
 %   * no faults are modeled
 %
+%   * the system of commit ___ has:
+%         number of system variables: 171,
+%         number of auxiliary variables: 14
+%
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
 
@@ -19,7 +23,7 @@ om1_cal_v4: CONTEXT =
 BEGIN
 
 
-%--- Nodes and IDs --------------------------------------------------
+%=== Nodes and IDs -----------------------------------------------===
 
 % IDs for nodes
 IDENTITY:  TYPE     = [0..6];  % 1 source, 3 relays, 3 receivers
@@ -41,7 +45,7 @@ is_relay?(i: IDENTITY):    BOOLEAN = 1 <= i AND i <= 3;
 is_receiver?(i: IDENTITY): BOOLEAN = 4 <= i AND i <= 6;
 
 
-%--- Channels -------------------------------------------------------
+%=== Channels ----------------------------------------------------===
 
 % channel IDs
 %   1-3:   source -> 3 relays
@@ -73,13 +77,11 @@ chan(i:IDENTITY, j:IDENTITY): CHANNEL =
     13 + (j-4)
   ENDIF;
 
-%--- Messages and Values --------------------------------------------
+%=== Messages and Values -----------------------------------------===
 
 % values recieved by relays and receivers
 MESSAGE: TYPE = { good, bad, missing };
 
-
-%--- Time -----------------------------------------------------------
 
 % Time is modeled by non-negative integers 
 % -1 is reserved as an invalid time
@@ -91,7 +93,7 @@ msg_delay: TIME = 1;
 
 
 %
-%--- Calendar Automata ----------------------------------------------
+% Calendar Automata
 %
 % Calendar data structure for communication between nodes. The structure
 % allows for at most 1 message to be sent from any node to any other
@@ -160,9 +162,9 @@ msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
       WITH .time[chan(i,j)] := invalid_time;
 
 
-%----------------------------------------------------------------------
-% Transition System
-%----------------------------------------------------------------------
+%===----------------------------------------------------------------===
+%       Transition System
+%===----------------------------------------------------------------===
 
 %
 % The 'clock' module gives the general its message and manages the
@@ -282,6 +284,7 @@ TRANSITION
         mode = receiving AND node_event?(cal, i, p, t) -->
           buffer'[i] = msg(cal, i, p);
           % TODO: this is kludgy
+          %       full_buffer?(ARRAY RELAYS of MESSAGE): BOOLEAN
           cal' = IF (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
                  THEN
                    LET cal1:CALENDAR = msg_consume(cal, i, p) IN
@@ -304,7 +307,7 @@ TRANSITION
       mode = voting AND pc = 0 -->
         candidate' = missing;
         counter' = 0;
-        ix' = 0;
+        ix' = 1;
         pc' = pc + 1
     []
       receiver_vote_loop:
@@ -332,9 +335,9 @@ TRANSITION
 END;
 
 
-%----------------------------------------------------------------------
-% System
-%----------------------------------------------------------------------
+%===----------------------------------------------------------------===
+%       System
+%===----------------------------------------------------------------===
 
 % asyncronous composition is used to better model message passing
 system: MODULE =
@@ -351,9 +354,9 @@ system: MODULE =
                                IN receiver[x]));
 
 
-%----------------------------------------------------------------------
-% Syncronous Observer
-%----------------------------------------------------------------------
+%===----------------------------------------------------------------===
+%       Syncronous Observer
+%===----------------------------------------------------------------===
 
 % Alternative to specifying THEOREMs using LTL is the
 % synchronous observer for 'validity' and 'agreement'
@@ -397,11 +400,11 @@ END;
 system_obs : MODULE = system || observer;
 
 
-%--------------------------------------------------------------------
-%  Verification
-%--------------------------------------------------------------------
+%===--------------------------------------------------------------===
+%       Verification
+%===--------------------------------------------------------------===
 
-%---  Main Theorems  ---
+%===  Main Theorems  ===
 
 % system eventually finishes (at which point vaa can be checked).
 % Alternatively, the safety property 'not_all_done' listed below can be
@@ -409,23 +412,41 @@ system_obs : MODULE = system || observer;
 finish: THEOREM system_obs |- F(NOT not_done);
 
 % validity and agreement hold when the system is "done"
+%
+%   $ sal-bmc -v 1 -d 36 om1_cal_v4.sal vaa
+%   no counterexample between depths: [0, 36]
+%   192.36 secs
+%
 vaa: THEOREM system_obs |- G(vaa_ok);
 
 
-%--- Invariants ---
+%=== Invariants ===
+
+% TODO: state disjunctive invariant for the systems phases
 
 
-%--- Tests for bounded model checker; these are non-THEOREMS  ---
+%===--------------------------------------------------------------===
+%       Tests
+%===--------------------------------------------------------------===
+
+% TESTS for bounded model checker; these are non-THEOREMS
 
 % components finish eventually:
 source_test:    THEOREM system |- G(NOT source_done);
 relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
+
+% counterexample at depth 6, 8.29 secs
+time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
+                                        % only advance as far as the relay broadcast
+% counterexample at depth 29, 2.61 secs
 recv_full_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_full[i]);
+
+% counterexample at depth 30, 4.44 secs
 recv_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
-time_test: THEOREM system |- G(t < 1);  % for msg_delay = 1 this implies we
-                                        % advance to the relay broadcast
 
 % everyone finishes eventually:
-not_all_done: THEOREM system_obs |- G(not_done);
+%   true to depth 30, 14.6 secs
+%   counterexample at depth 36, 26.18 secs!
+all_done_test: THEOREM system_obs |- G(not_done);
 
 END
