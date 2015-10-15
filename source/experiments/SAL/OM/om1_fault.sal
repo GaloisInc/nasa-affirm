@@ -1,0 +1,483 @@
+% SAL model of OM(1)
+%
+% Oral Messages 1 algorithm
+% version 4
+%
+% Notes:
+%   * static number of nodes: n=3, k=3
+%   * communication is modeled through a REAL time clock module and a
+%     calendar automata that keeps track of messages and delivery times
+%   * attempted to minimize number of state vars
+%   * all nodes in 'system' are composed asynchronously
+%   * main properties are specified using synchronous observer 'observer'
+%   * no faults are modeled
+%
+%   * the system of commit ___ has:
+%         number of system variables: 171,
+%         number of auxiliary variables: 14
+%
+% Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
+
+
+om1_cal_v4: CONTEXT =
+BEGIN
+
+
+%=== Nodes and IDs -----------------------------------------------===
+
+% IDs for nodes
+IDENTITY:  TYPE     = [0..6];  % 1 source, 3 relays, 3 receivers
+
+% Static node IDs
+source_id: IDENTITY = 0;
+relay1_id: IDENTITY = 1;
+relay2_id: IDENTITY = 2;
+relay3_id: IDENTITY = 3;
+RELAYS: TYPE = [1..3];
+receiver1_id: IDENTITY = 4;
+receiver2_id: IDENTITY = 5;
+receiver3_id: IDENTITY = 6;
+RECEIVERS: TYPE = [4..6];
+
+% Helper functions for identification
+is_source?(i: IDENTITY):   BOOLEAN = i = source_id;
+is_relay?(i: IDENTITY):    BOOLEAN = 1 <= i AND i <= 3;
+is_receiver?(i: IDENTITY): BOOLEAN = 4 <= i AND i <= 6;
+
+
+%=== Channels ----------------------------------------------------===
+
+% channel IDs
+%   1-3:   source -> 3 relays
+%   4-6:   relay 1 -> receivers
+%   7-9:   relay 2 -> receivers
+%   10-12: relay 3 -> receivers
+%   13-15: receiver -> self
+CHANNEL: TYPE = [1..15];
+
+% Determine if there is a channel i -> j. This is fixed at compile time.
+linked?(i:IDENTITY, j:IDENTITY): BOOLEAN =
+  IF i = 0 AND is_relay?(j) THEN
+    TRUE
+  ELSIF is_relay?(i) AND is_receiver?(j) THEN
+    TRUE
+  ELSIF is_receiver?(i) AND i = j THEN
+    TRUE
+  ELSE
+    FALSE
+  ENDIF;
+
+% compute channel ID from the (src, dest) pair
+chan(i:IDENTITY, j:IDENTITY): CHANNEL =
+  IF i=0 THEN  % source -> relay chans are 1, 2, 3
+    j
+  ELSIF j > 3 AND i /= j THEN  % relay_i -> receiver_j chans
+    4 + (i-1)*3 + (j-4)
+  ELSE  % i = j is a receiver
+    13 + (j-4)
+  ENDIF;
+
+%=== Messages and Values -----------------------------------------===
+
+% values recieved by relays and receivers
+MESSAGE: TYPE = { good, bad, missing };
+
+
+% Time is modeled by non-negative integers 
+% -1 is reserved as an invalid time
+% -2 is reserved as an atomic "out-of-band" time
+TIME: TYPE = [-2..5];  % upper bound of TIME is determined at compile time
+invalid_time: TIME = -1;
+atomic_time: TIME = -2;
+msg_delay: TIME = 1;
+
+
+%
+% Calendar Automata
+%
+% Calendar data structure for communication between nodes. The structure
+% allows for at most 1 message to be sent from any node to any other
+% at a given time.
+%
+CALENDAR: TYPE =
+  [# msg  : ARRAY CHANNEL of MESSAGE,  % contents of message
+     time : ARRAY CHANNEL of TIME      % time for delivery
+  #];
+
+empty_calendar: CALENDAR =
+  (# msg  := [[c:CHANNEL] missing],
+     time := [[c:CHANNEL] invalid_time]
+  #);
+
+FAULTS: TYPE = [# faulty? : ARRAY NODES OF BOOLEAN #];
+
+% Helper functions for getting/setting the calendar
+null?(cal: CALENDAR, c: CHANNEL): BOOLEAN =
+  cal.msg[c] = missing AND cal.time[c] = invalid_time;
+
+uninterp_msg: [TIME -> IDENTITY -> IDENTITY -> MESSAGE];
+
+msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
+  IF f.faulty?[i] THEN
+    uninterp_msg(s, i, j);
+  ELSE
+    cal.msg[chan(i,j)]  % return correct message
+  ENDIF;
+
+delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
+  cal.time[chan(i,j)];
+
+% Is the given time the minimum among all valid times on the calendar?
+is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
+  (FORALL (c:CHANNEL): NOT null?(cal,c) => t <= cal.time[c]) AND
+  (EXISTS (c:CHANNEL): NOT null?(cal,c) AND t = cal.time[c]);
+
+% Is there an event i -> j yet to occur at the given time?
+% Returns FALSE if
+%
+%     A) the pair i,j has no channel between them OR
+%     B) there is a pending atomic event.
+%
+node_event?(cal:CALENDAR, i:IDENTITY, j:IDENTITY, t:TIME): BOOLEAN =
+  IF linked?(i,j) AND is_next_time?(cal,t) THEN
+    cal.msg[chan(i,j)] /= missing AND delivery(cal,i,j) = t
+  ELSE
+    FALSE
+  ENDIF;
+
+% is there an event yet to occur at the given time?
+event_pending?(cal:CALENDAR, t:TIME): BOOLEAN =
+  (EXISTS (c:CHANNEL): cal.msg[c] /= missing AND cal.time[c] = t);
+
+% is there an atomic event pending?
+atomic_pending?(cal: CALENDAR): BOOLEAN = event_pending?(cal, atomic_time);
+
+% send a message with given delay
+msg_send_delta(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME, d:TIME): CALENDAR =
+  cal WITH .msg[chan(i,j)]  := m
+      WITH .time[chan(i,j)] := t + d;
+
+% default msg_send function has 'msg_delay' delay
+msg_send(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME): CALENDAR =
+  msg_send_delta(cal,i,j,m,t,msg_delay);
+
+% add a 'preemtive' message (or interrupt) to the calendar. This action
+% prevents transitions from occuring except in the 'atomic' section of the
+% calling module.
+msg_send_interrupt(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
+  msg_send_delta(cal,i,j,good,atomic_time,0);
+
+msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
+  cal WITH .msg[chan(i,j)]  := missing
+      WITH .time[chan(i,j)] := invalid_time;
+
+
+%===----------------------------------------------------------------===
+%       Transition System
+%===----------------------------------------------------------------===
+
+%
+% The 'clock' module gives the general its message and manages the
+% advance of time.
+clock: MODULE =
+BEGIN
+    GLOBAL
+      cal: CALENDAR,
+      t:   TIME
+    INPUT
+      source_done: BOOLEAN,
+      relays_done: ARRAY RELAYS OF BOOLEAN,
+      receivers_done: ARRAY RECEIVERS OF BOOLEAN
+    OUTPUT
+      source_msg: MESSAGE  % message value for source to send
+INITIALIZATION
+    cal = empty_calendar;
+    t = 0;
+    source_msg = good
+TRANSITION
+    [
+      advance_time:
+        NOT is_next_time?(cal,t) --> t' IN { s:TIME | is_next_time?(cal,s) }
+    []
+      % allow clock to stutter once the system reaches the end of one round
+      stutter:
+        source_done AND
+        (FORALL (i:RELAYS): relays_done[i]) AND
+        (FORALL (i:RECEIVERS): receivers_done[i])
+        -->  % nothing
+    ]
+END;
+
+% 'source' sends a message (source_msg) to all relays
+source: MODULE =
+BEGIN
+    GLOBAL cal: CALENDAR
+    INPUT source_msg: MESSAGE, t: TIME
+    OUTPUT source_done: BOOLEAN
+INITIALIZATION
+    source_done = FALSE;
+TRANSITION
+    [
+      source_broadcast:
+      NOT source_done -->
+        cal' = LET cal1:CALENDAR = msg_send(cal,  source_id, relay1_id,
+                                            source_msg, t) IN
+               LET cal2:CALENDAR = msg_send(cal1, source_id, relay2_id,
+                                            source_msg, t) IN
+                                   msg_send(cal2, source_id, relay3_id,
+                                            source_msg, t);
+        source_done' = TRUE
+    ]
+END;
+
+
+relay[i: RELAYS]: MODULE =
+BEGIN
+    GLOBAL cal: CALENDAR
+    INPUT  f: FAULTS, t: TIME
+    OUTPUT relay_done: BOOLEAN
+INITIALIZATION
+    relay_done = FALSE
+TRANSITION
+    [
+      relay_broadcast:
+      (NOT relay_done) AND node_event?(cal, source_id, i, t) -->
+        cal' = LET m:MESSAGE     = msg(t, cal, f, source_id, i) IN
+               LET cal1:CALENDAR = msg_send(cal,  i, receiver1_id, m, t) IN
+               LET cal2:CALENDAR = msg_send(cal1, i, receiver2_id, m, t) IN
+               LET cal3:CALENDAR = msg_send(cal2, i, receiver3_id, m, t) IN
+               msg_consume(cal3, source_id, i);
+        relay_done' = TRUE
+    ]
+END;
+
+% receiving means waiting for all relays to send their messages
+% voting  means waiting on the ivote machine to return an answer
+% done       means vote has been computed
+RECEIVER_MODES: TYPE = {receiving, voting, done};
+
+receiver[p:RECEIVERS]: MODULE =
+BEGIN
+    GLOBAL cal: CALENDAR
+    INPUT  f: FAULTS, t: TIME
+    OUTPUT
+        vote: MESSAGE,
+        receiver_full: BOOLEAN,
+        receiver_done: BOOLEAN
+    LOCAL
+        mode: RECEIVER_MODES,
+        critical: BOOLEAN,
+        buffer: ARRAY RELAYS of MESSAGE,
+        candidate: MESSAGE,
+        counter: [0..3],
+        ix: [1..4],
+        pc: [0..5]
+INITIALIZATION
+    % outputs
+    mode = receiving;
+    receiver_done = FALSE;
+    receiver_full = FALSE;
+    vote = missing;
+    % locals
+    buffer = [[r:RELAYS] missing];
+    candidate = missing;
+    counter = 0;
+    ix = 1;
+    pc = 0;
+TRANSITION
+    [
+      % rec'v message from relay
+      % If buffer is full and mutex is free, then enter the vote section. The
+      % mutex is freed in the 'receiver_exit' transition.
+      ([] (i:RELAYS):
+        receiver_recv:
+        mode = receiving AND node_event?(cal, i, p, t) -->
+          buffer'[i] = msg(t, cal, f, i, p);
+          % TODO: this is kludgy
+          %       full_buffer?(ARRAY RELAYS of MESSAGE): BOOLEAN
+          cal' = IF (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
+                 THEN
+                   LET cal1:CALENDAR = msg_consume(cal, i, p) IN
+                   msg_send_interrupt(cal1, p, p)
+                 ELSE
+                   msg_consume(cal, i, p)
+                 ENDIF;
+          mode' = IF  (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
+                  THEN voting ELSE mode ENDIF;
+          receiver_full' = IF (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
+                  THEN TRUE ELSE receiver_full ENDIF
+      )
+    []
+
+    %
+    % The majority vote logic is unrolled in the following transitions
+    %
+
+      receiver_vote_0:
+      mode = voting AND pc = 0 -->
+        candidate' = missing;
+        counter' = 0;
+        ix' = 1;
+        pc' = pc + 1
+    []
+      receiver_vote_loop:
+      mode = voting AND pc > 0 AND 1 <= ix AND ix <= 3 -->  % 3 = max_relay_id
+        candidate' = IF buffer[ix] = candidate
+                       THEN candidate
+                     ELSIF counter = 0
+                       THEN buffer[ix]
+                     ELSE candidate ENDIF;
+        counter'   = IF buffer[ix] = candidate
+                       THEN counter+1
+                     ELSIF counter = 0
+                       THEN 0
+                     ELSE counter-1 ENDIF;
+        ix' = ix + 1;
+        pc' = pc + 1
+    []
+        receiver_exit:
+        mode = voting AND pc > 0 AND ix = 4 -->
+          cal' = msg_consume(cal, p, p);  % release the mutex
+          vote' = candidate;
+          mode' = done;
+          receiver_done' = TRUE
+    ]
+END;
+
+
+%===----------------------------------------------------------------===
+%       System
+%===----------------------------------------------------------------===
+
+% asyncronous composition is used to better model message passing
+system: MODULE =
+        clock
+     [] source
+     [] (WITH OUTPUT relays_done: ARRAY RELAYS OF BOOLEAN
+           ([] (x:RELAYS): RENAME relay_done TO relays_done[x] IN relay[x]))
+     [] (WITH OUTPUT receivers_done: ARRAY RECEIVERS OF BOOLEAN
+         WITH OUTPUT receivers_full: ARRAY RECEIVERS OF BOOLEAN
+         WITH OUTPUT votes: ARRAY RECEIVERS of MESSAGE
+           ([] (x:RECEIVERS):  RENAME vote TO votes[x]
+                               IN RENAME receiver_done TO receivers_done[x]
+                               IN RENAME receiver_full TO receivers_full[x]
+                               IN receiver[x]));
+
+
+%===----------------------------------------------------------------===
+%       Syncronous Observer
+%===----------------------------------------------------------------===
+
+% Alternative to specifying THEOREMs using LTL is the
+% synchronous observer for 'validity' and 'agreement'
+observer: MODULE =
+BEGIN
+  INPUT
+    source_done: BOOLEAN,
+    relays_done: ARRAY RELAYS OF BOOLEAN,
+    receivers_done: ARRAY RECEIVERS OF BOOLEAN,
+    votes: ARRAY RECEIVERS OF MESSAGE
+  OUTPUT
+    vaa_ok: BOOLEAN,
+    not_done: BOOLEAN
+INITIALIZATION
+  vaa_ok = TRUE;
+  not_done = TRUE
+TRANSITION
+  [
+    no_validity:
+      (FORALL (x:RECEIVERS): receivers_done[x]) AND
+      (NOT (FORALL (x:RECEIVERS): votes[x]=good)) -->
+        vaa_ok' = FALSE
+  []
+    no_agreement:
+      (FORALL (x:RECEIVERS): receivers_done[x]) AND
+      (NOT (FORALL (x,y:RECEIVERS): votes[x]=votes[y])) -->
+        vaa_ok' = FALSE
+  []
+    % For the test THEOREMS below
+    all_done:
+      source_done AND
+      (FORALL (i:RELAYS): relays_done[i]) AND
+      (FORALL (r:RECEIVERS): receivers_done[r]) -->
+        not_done' = FALSE
+  []
+    % prevent deadlock of the observer
+    ELSE -->
+  ]
+END;
+
+%===----------------------------------------------------------------===
+%       Synchronous Kibitzer
+%===----------------------------------------------------------------===
+
+kibitzer: MODULE =
+BEGIN
+OUTPUT f: FAULTS
+LOCAL  init_ok: BOOLEAN
+INITIALIZATION
+  f = (# faulty? := [[a:NODES]: FALSE] #);
+  init_ok = FALSE
+TRANSITION
+  [
+    NOT init_ok --> f' = f WITH .faulty? IN ARRAY NODES OF BOOLEAN;
+                    init_ok' = TRUE
+  []
+    ELSE -->
+  ]
+END;
+
+
+system_obs : MODULE = system || observer || kibitzer;
+
+
+%===--------------------------------------------------------------===
+%       Verification
+%===--------------------------------------------------------------===
+
+%===  Main Theorems  ===
+
+% system eventually finishes (at which point vaa can be checked).
+% Alternatively, the safety property 'not_all_done' listed below can be
+% checked for counterexamples with bmc.
+finish: THEOREM system_obs |- F(NOT not_done);
+
+% validity and agreement hold when the system is "done"
+%
+%   $ sal-bmc -v 1 -d 36 om1_cal_v4.sal vaa
+%   no counterexample between depths: [0, 36]
+%   192.36 secs
+%
+vaa: THEOREM system_obs |- G(vaa_ok);
+
+
+%=== Invariants ===
+
+% TODO: state disjunctive invariant for the systems phases
+
+
+%===--------------------------------------------------------------===
+%       Tests
+%===--------------------------------------------------------------===
+
+% TESTS for bounded model checker; these are non-THEOREMS
+
+% components finish eventually:
+source_test:    THEOREM system |- G(NOT source_done);
+relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
+
+% counterexample at depth 6, 8.29 secs
+time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
+                                        % only advance as far as the relay broadcast
+% counterexample at depth 29, 2.61 secs
+recv_full_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_full[i]);
+
+% counterexample at depth 30, 4.44 secs
+recv_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
+
+% everyone finishes eventually:
+%   true to depth 30, 14.6 secs
+%   counterexample at depth 36, 26.18 secs!
+all_done_test: THEOREM system_obs |- G(not_done);
+
+END
