@@ -19,7 +19,7 @@
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
 
-om1_cal_v4: CONTEXT =
+om1_fault: CONTEXT =
 BEGIN
 
 
@@ -109,17 +109,18 @@ empty_calendar: CALENDAR =
      time := [[c:CHANNEL] invalid_time]
   #);
 
-FAULTS: TYPE = [# faulty? : ARRAY NODES OF BOOLEAN #];
+FAULTS: TYPE = [# faulty? : ARRAY IDENTITY OF BOOLEAN #];
 
 % Helper functions for getting/setting the calendar
 null?(cal: CALENDAR, c: CHANNEL): BOOLEAN =
   cal.msg[c] = missing AND cal.time[c] = invalid_time;
 
-uninterp_msg: [TIME -> IDENTITY -> IDENTITY -> MESSAGE];
+% uninterp_msg: [TIME -> IDENTITY -> IDENTITY -> MESSAGE];
+uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): MESSAGE;
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
   IF f.faulty?[i] THEN
-    uninterp_msg(s, i, j);
+    uninterp_msg(s, i, j)
   ELSE
     cal.msg[chan(i,j)]  % return correct message
   ENDIF;
@@ -183,7 +184,8 @@ clock: MODULE =
 BEGIN
     GLOBAL
       cal: CALENDAR,
-      t:   TIME
+      t:   TIME,
+      f:   FAULTS
     INPUT
       source_done: BOOLEAN,
       relays_done: ARRAY RELAYS OF BOOLEAN,
@@ -407,28 +409,8 @@ TRANSITION
   ]
 END;
 
-%===----------------------------------------------------------------===
-%       Synchronous Kibitzer
-%===----------------------------------------------------------------===
 
-kibitzer: MODULE =
-BEGIN
-OUTPUT f: FAULTS
-LOCAL  init_ok: BOOLEAN
-INITIALIZATION
-  f = (# faulty? := [[a:NODES]: FALSE] #);
-  init_ok = FALSE
-TRANSITION
-  [
-    NOT init_ok --> f' = f WITH .faulty? IN ARRAY NODES OF BOOLEAN;
-                    init_ok' = TRUE
-  []
-    ELSE -->
-  ]
-END;
-
-
-system_obs : MODULE = system || observer || kibitzer;
+system_obs : MODULE = system || observer;
 
 
 %===--------------------------------------------------------------===
