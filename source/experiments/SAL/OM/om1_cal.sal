@@ -16,10 +16,12 @@
 %         number of system variables: 171,
 %         number of auxiliary variables: 14
 %
+% See the 'Verification' section for details on what is proved and how.
+%
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
 
-om1_cal_v4: CONTEXT =
+om1_cal: CONTEXT =
 BEGIN
 
 
@@ -404,19 +406,42 @@ system_obs : MODULE = system || observer;
 %       Verification
 %===--------------------------------------------------------------===
 
+
+
+%===  Proof script commands  ===
+
+% The commands listed in these comments are executed by the 'runproof.sh'
+% script.
+%
+% 1) Check for deadlock: (106s)
+%
+%   sal-deadlock-checker -v 1 --enable-slicer --enable-dynamic-reorder --disable-counter-examples om1_cal system_obs
+%
+% 2) Symbolic model checking of 'finish' theorem: (112s)
+%
+%   sal-smc -v 1 --enable-dynamic-reorder --enable-slicer --disable-counter-examples om1_cal finish
+%
+% 3) Symbolic model checking of vaa theorem: (91s)
+%
+%   sal-smc -v 1 --enable-dynamic-reorder --enable-slicer --disable-counter-examples om1_cal vaa
+%
+% 4) Bounded model checking of vaa theorem: (188s)
+%
+%   sal-bmc -v 1 -d 36 --enable-slicer --disable-traceability om1_cal.sal vaa
+%
+
+
 %===  Main Theorems  ===
+
 
 % system eventually finishes (at which point vaa can be checked).
 % Alternatively, the safety property 'not_all_done' listed below can be
 % checked for counterexamples with bmc.
 finish: THEOREM system_obs |- F(NOT not_done);
 
-% validity and agreement hold when the system is "done"
-%
-%   $ sal-bmc -v 1 -d 36 om1_cal_v4.sal vaa
-%   no counterexample between depths: [0, 36]
-%   192.36 secs
-%
+
+% This is the main theorem of interest. It states that validity and agreement hold
+% when the system is "done" (i.e. one round is completed)
 vaa: THEOREM system_obs |- G(vaa_ok);
 
 
@@ -429,22 +454,27 @@ vaa: THEOREM system_obs |- G(vaa_ok);
 %       Tests
 %===--------------------------------------------------------------===
 
-% TESTS for bounded model checker; these are non-THEOREMS
 
-% components finish eventually:
+% TESTS for bounded model checker; these are non-THEOREMS used to quickly check that
+% expected conditions hold at various points in some system trace
+
+% individual components finish eventually:
 source_test:    THEOREM system |- G(NOT source_done);
 relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
 
+% time progresses past t = 1
 % counterexample at depth 6, 8.29 secs
 time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
                                         % only advance as far as the relay broadcast
+% reciever buffers fill up eventually
 % counterexample at depth 29, 2.61 secs
 recv_full_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_full[i]);
 
+% receivers finish the majority vote computation eventually
 % counterexample at depth 30, 4.44 secs
 recv_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
 
-% everyone finishes eventually:
+% all components finish eventually:
 %   true to depth 30, 14.6 secs
 %   counterexample at depth 36, 26.18 secs!
 all_done_test: THEOREM system_obs |- G(not_done);
