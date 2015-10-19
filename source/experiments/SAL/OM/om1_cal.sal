@@ -19,7 +19,7 @@
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 
 
-om1_cal_v4: CONTEXT =
+om1_cal: CONTEXT =
 BEGIN
 
 
@@ -404,6 +404,20 @@ system_obs : MODULE = system || observer;
 %       Verification
 %===--------------------------------------------------------------===
 
+
+
+%===  Proof script commands  ===
+
+
+% symbolic model checking of vaa theorem:
+%
+%   sal-smc --enable-dynamic-reorder --enable-slicer --disable-counter-examples om1_cal vaa
+
+% bounded model checking of vaa theorem: (188s)
+%
+%   sal-bmc -d 36 --enable-slicer --disable-traceability om1_cal.sal vaa
+
+
 %===  Main Theorems  ===
 
 % system eventually finishes (at which point vaa can be checked).
@@ -411,12 +425,8 @@ system_obs : MODULE = system || observer;
 % checked for counterexamples with bmc.
 finish: THEOREM system_obs |- F(NOT not_done);
 
+
 % validity and agreement hold when the system is "done"
-%
-%   $ sal-bmc -v 1 -d 36 om1_cal_v4.sal vaa
-%   no counterexample between depths: [0, 36]
-%   192.36 secs
-%
 vaa: THEOREM system_obs |- G(vaa_ok);
 
 
