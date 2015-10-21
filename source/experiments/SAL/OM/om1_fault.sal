@@ -57,15 +57,9 @@ CHANNEL: TYPE = [1..15];
 
 % Determine if there is a channel i -> j. This is fixed at compile time.
 linked?(i:IDENTITY, j:IDENTITY): BOOLEAN =
-  IF i = 0 AND is_relay?(j) THEN
-    TRUE
-  ELSIF is_relay?(i) AND is_receiver?(j) THEN
-    TRUE
-  ELSIF is_receiver?(i) AND i = j THEN
-    TRUE
-  ELSE
-    FALSE
-  ENDIF;
+     (i = 0           AND is_relay?(j))
+  OR (is_relay?(i)    AND is_receiver?(j))
+  OR (is_receiver?(i) AND i = j);
 
 % compute channel ID from the (src, dest) pair
 chan(i:IDENTITY, j:IDENTITY): CHANNEL =
@@ -80,13 +74,14 @@ chan(i:IDENTITY, j:IDENTITY): CHANNEL =
 %=== Messages and Values -----------------------------------------===
 
 % values recieved by relays and receivers
-MESSAGE: TYPE = { good, bad, missing };
-
+MESSAGE: TYPE = { good, missing, faulty };
+source_msg: MESSAGE = good;
 
 % Time is modeled by non-negative integers 
 % -1 is reserved as an invalid time
 % -2 is reserved as an atomic "out-of-band" time
 TIME: TYPE = [-2..5];  % upper bound of TIME is determined at compile time
+%TIME: TYPE = {i: INTEGER | TRUE }; 
 invalid_time: TIME = -1;
 atomic_time: TIME = -2;
 msg_delay: TIME = 1;
@@ -111,12 +106,8 @@ empty_calendar: CALENDAR =
 
 FAULTS: TYPE = [# faulty? : ARRAY IDENTITY OF BOOLEAN #];
 
-% Helper functions for getting/setting the calendar
-null?(cal: CALENDAR, c: CHANNEL): BOOLEAN =
-  cal.msg[c] = missing AND cal.time[c] = invalid_time;
-
 % uninterp_msg: [TIME -> IDENTITY -> IDENTITY -> MESSAGE];
-uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): MESSAGE;
+uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): {m : MESSAGE | m /= missing };
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
   IF f.faulty?[i] THEN
@@ -125,13 +116,17 @@ msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
     cal.msg[chan(i,j)]  % return correct message
   ENDIF;
 
-delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
-  cal.time[chan(i,j)];
+% Helper functions for getting/setting the calendar
+null?(cal: CALENDAR, c: CHANNEL): BOOLEAN =
+  cal.msg[c] = missing AND cal.time[c] = invalid_time;
 
 % Is the given time the minimum among all valid times on the calendar?
 is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
-  (FORALL (c:CHANNEL): NOT null?(cal,c) => t <= cal.time[c]) AND
-  (EXISTS (c:CHANNEL): NOT null?(cal,c) AND t = cal.time[c]);
+      (FORALL (c:CHANNEL): NOT null?(cal,c) => t <= cal.time[c])
+  AND (EXISTS (c:CHANNEL): NOT null?(cal,c) AND t = cal.time[c]);
+
+delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
+  cal.time[chan(i,j)];
 
 % Is there an event i -> j yet to occur at the given time?
 % Returns FALSE if
@@ -140,11 +135,11 @@ is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
 %     B) there is a pending atomic event.
 %
 node_event?(cal:CALENDAR, i:IDENTITY, j:IDENTITY, t:TIME): BOOLEAN =
-  IF linked?(i,j) AND is_next_time?(cal,t) THEN
-    cal.msg[chan(i,j)] /= missing AND delivery(cal,i,j) = t
-  ELSE
-    FALSE
-  ENDIF;
+      linked?(i,j)
+  AND is_next_time?(cal,t)
+  % AND cal.msg[chan(i,j)] /= missing
+  AND NOT null?(cal,chan(i,j))
+  AND delivery(cal,i,j) = t;
 
 % is there an event yet to occur at the given time?
 event_pending?(cal:CALENDAR, t:TIME): BOOLEAN =
@@ -152,6 +147,11 @@ event_pending?(cal:CALENDAR, t:TIME): BOOLEAN =
 
 % is there an atomic event pending?
 atomic_pending?(cal: CALENDAR): BOOLEAN = event_pending?(cal, atomic_time);
+
+% Am I in atomic mode?
+i_am_atomic?(cal: CALENDAR, i: IDENTITY, t: TIME): BOOLEAN =
+      EXISTS (j: IDENTITY): linked?(i,j) AND cal.time[chan(j,i)] = atomic_time
+  AND t = atomic_time;
 
 % send a message with given delay
 msg_send_delta(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME, d:TIME): CALENDAR =
@@ -190,12 +190,9 @@ BEGIN
       source_done: BOOLEAN,
       relays_done: ARRAY RELAYS OF BOOLEAN,
       receivers_done: ARRAY RECEIVERS OF BOOLEAN
-    OUTPUT
-      source_msg: MESSAGE  % message value for source to send
 INITIALIZATION
     cal = empty_calendar;
     t = 0;
-    source_msg = good
 TRANSITION
     [
       advance_time:
@@ -214,14 +211,14 @@ END;
 source: MODULE =
 BEGIN
     GLOBAL cal: CALENDAR
-    INPUT source_msg: MESSAGE, t: TIME
+    INPUT  t: TIME
     OUTPUT source_done: BOOLEAN
 INITIALIZATION
     source_done = FALSE;
 TRANSITION
     [
       source_broadcast:
-      NOT source_done -->
+      NOT source_done AND t = 0 -->
         cal' = LET cal1:CALENDAR = msg_send(cal,  source_id, relay1_id,
                                             source_msg, t) IN
                LET cal2:CALENDAR = msg_send(cal1, source_id, relay2_id,
@@ -306,9 +303,11 @@ TRANSITION
                  ENDIF;
           mode' = IF  (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
                   THEN voting ELSE mode ENDIF;
-          receiver_full' = IF (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
-                  THEN TRUE ELSE receiver_full ENDIF
-      )
+
+          receiver_full' =   (    (FORALL (r:RELAYS): buffer'[r] /= missing)
+                              AND NOT atomic_pending?(cal))
+                          OR receiver_full;
+       )
     []
 
     %
@@ -316,14 +315,14 @@ TRANSITION
     %
 
       receiver_vote_0:
-      mode = voting AND pc = 0 -->
+      mode = voting AND pc = 0 AND i_am_atomic?(cal, p, t) -->
         candidate' = missing;
         counter' = 0;
         ix' = 1;
         pc' = pc + 1
     []
       receiver_vote_loop:
-      mode = voting AND pc > 0 AND 1 <= ix AND ix <= 3 -->  % 3 = max_relay_id
+      mode = voting AND pc > 0 AND 1 <= ix AND ix <= 3 AND i_am_atomic?(cal, p, t) -->  % 3 = max_relay_id
         candidate' = IF buffer[ix] = candidate
                        THEN candidate
                      ELSIF counter = 0
@@ -338,7 +337,7 @@ TRANSITION
         pc' = pc + 1
     []
         receiver_exit:
-        mode = voting AND pc > 0 AND ix = 4 -->
+        mode = voting AND pc > 0 AND ix = 4 AND i_am_atomic?(cal, p, t) -->
           cal' = msg_consume(cal, p, p);  % release the mutex
           vote' = candidate;
           mode' = done;
@@ -434,6 +433,26 @@ vaa: THEOREM system_obs |- G(vaa_ok);
 
 
 %=== Invariants ===
+
+global_time_not_null(t: TIME): BOOLEAN = t /= -1;
+
+monotonic_time(cal: CALENDAR, t: TIME): BOOLEAN =
+ FORALL (s: TIME): is_next_time?(cal, s) => s = atomic_time OR s >= t;
+
+missing_cal(cal: CALENDAR): BOOLEAN =
+  FORALL (i: CHANNEL): cal.msg[i] = missing <=> cal.time[i] = invalid_time;
+
+unique_atomic(cal: CALENDAR): BOOLEAN =
+  FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
+
+% proved:
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 3 om1_fault.sal lemma_conj
+lemma_conj: LEMMA system |-
+  G(    monotonic_time(cal, t)
+    AND global_time_not_null(t)
+    AND missing_cal(cal)
+    AND unique_atomic(cal)
+	 );
 
 % TODO: state disjunctive invariant for the systems phases
 
