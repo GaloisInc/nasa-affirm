@@ -17,6 +17,11 @@
 %         number of auxiliary variables: 14
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
+%         Lee Pike                            , Galois Inc. (2015)
+
+% TODOS:
+% * make message type infinite
+% * allow general to send non-good message (change precondition for no_validity)
 
 
 om1_fault: CONTEXT =
@@ -77,11 +82,11 @@ chan(i:IDENTITY, j:IDENTITY): CHANNEL =
 MESSAGE: TYPE = { good, missing, faulty };
 source_msg: MESSAGE = good;
 
-% Time is modeled by non-negative integers 
+% Time is modeled by non-negative integers
 % -1 is reserved as an invalid time
 % -2 is reserved as an atomic "out-of-band" time
 TIME: TYPE = [-2..5];  % upper bound of TIME is determined at compile time
-%TIME: TYPE = {i: INTEGER | TRUE }; 
+%TIME: TYPE = {i: INTEGER | TRUE };
 invalid_time: TIME = -1;
 atomic_time: TIME = -2;
 msg_delay: TIME = 1;
@@ -106,7 +111,6 @@ empty_calendar: CALENDAR =
 
 FAULTS: TYPE = [# faulty? : ARRAY IDENTITY OF BOOLEAN #];
 
-% uninterp_msg: [TIME -> IDENTITY -> IDENTITY -> MESSAGE];
 uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): {m : MESSAGE | m /= missing };
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
@@ -257,25 +261,24 @@ RECEIVER_MODES: TYPE = {receiving, voting, done};
 
 receiver[p:RECEIVERS]: MODULE =
 BEGIN
-    GLOBAL cal: CALENDAR
+    GLOBAL
+        cal: CALENDAR
     INPUT  f: FAULTS, t: TIME
     OUTPUT
         vote: MESSAGE,
-        receiver_full: BOOLEAN,
-        receiver_done: BOOLEAN
+        receiver_done: BOOLEAN,
+        counter: [0..3],
+        ix: [1..4]
     LOCAL
         mode: RECEIVER_MODES,
         critical: BOOLEAN,
         buffer: ARRAY RELAYS of MESSAGE,
         candidate: MESSAGE,
-        counter: [0..3],
-        ix: [1..4],
         pc: [0..5]
 INITIALIZATION
     % outputs
     mode = receiving;
     receiver_done = FALSE;
-    receiver_full = FALSE;
     vote = missing;
     % locals
     buffer = [[r:RELAYS] missing];
@@ -291,7 +294,10 @@ TRANSITION
       ([] (i:RELAYS):
         receiver_recv:
         mode = receiving AND node_event?(cal, i, p, t) -->
-          buffer'[i] = msg(t, cal, f, i, p);
+          buffer'[i] = IF buffer[i] = missing
+                         THEN msg(t, cal, f, i, p)
+	  										 ELSE buffer[i] % should never happen
+											 ENDIF;
           % TODO: this is kludgy
           %       full_buffer?(ARRAY RELAYS of MESSAGE): BOOLEAN
           cal' = IF (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
@@ -304,9 +310,6 @@ TRANSITION
           mode' = IF  (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
                   THEN voting ELSE mode ENDIF;
 
-          receiver_full' =   (    (FORALL (r:RELAYS): buffer'[r] /= missing)
-                              AND NOT atomic_pending?(cal))
-                          OR receiver_full;
        )
     []
 
@@ -323,11 +326,10 @@ TRANSITION
     []
       receiver_vote_loop:
       mode = voting AND pc > 0 AND 1 <= ix AND ix <= 3 AND i_am_atomic?(cal, p, t) -->  % 3 = max_relay_id
-        candidate' = IF buffer[ix] = candidate
-                       THEN candidate
-                     ELSIF counter = 0
-                       THEN buffer[ix]
-                     ELSE candidate ENDIF;
+        candidate' = IF counter = 0
+									 	   THEN buffer[ix]
+                       ELSE candidate
+                    ENDIF;
         counter'   = IF buffer[ix] = candidate
                        THEN counter+1
                      ELSIF counter = 0
@@ -357,11 +359,13 @@ system: MODULE =
      [] (WITH OUTPUT relays_done: ARRAY RELAYS OF BOOLEAN
            ([] (x:RELAYS): RENAME relay_done TO relays_done[x] IN relay[x]))
      [] (WITH OUTPUT receivers_done: ARRAY RECEIVERS OF BOOLEAN
-         WITH OUTPUT receivers_full: ARRAY RECEIVERS OF BOOLEAN
-         WITH OUTPUT votes: ARRAY RECEIVERS of MESSAGE
+         WITH OUTPUT counters:       ARRAY RECEIVERS OF [1..3]
+         WITH OUTPUT ixs:            ARRAY RECEIVERS OF [1..4]
+         WITH OUTPUT votes:          ARRAY RECEIVERS of MESSAGE
            ([] (x:RECEIVERS):  RENAME vote TO votes[x]
                                IN RENAME receiver_done TO receivers_done[x]
-                               IN RENAME receiver_full TO receivers_full[x]
+                               IN RENAME counter TO counters[x]
+                               IN RENAME ix TO ixs[x]
                                IN receiver[x]));
 
 
@@ -377,7 +381,8 @@ BEGIN
     source_done: BOOLEAN,
     relays_done: ARRAY RELAYS OF BOOLEAN,
     receivers_done: ARRAY RECEIVERS OF BOOLEAN,
-    votes: ARRAY RECEIVERS OF MESSAGE
+    votes: ARRAY RECEIVERS OF MESSAGE,
+    f: FAULTS
   OUTPUT
     vaa_ok: BOOLEAN,
     not_done: BOOLEAN
@@ -387,14 +392,17 @@ INITIALIZATION
 TRANSITION
   [
     no_validity:
-      (FORALL (x:RECEIVERS): receivers_done[x]) AND
-      (NOT (FORALL (x:RECEIVERS): votes[x]=good)) -->
+      (FORALL (x:RECEIVERS): receivers_done[x]
+         AND (NOT votes[x]=good)
+				 AND (NOT f.faulty?[source_id])
+		  )
+        -->
         vaa_ok' = FALSE
-  []
-    no_agreement:
-      (FORALL (x:RECEIVERS): receivers_done[x]) AND
-      (NOT (FORALL (x,y:RECEIVERS): votes[x]=votes[y])) -->
-        vaa_ok' = FALSE
+  % []
+  %   no_agreement:
+  %     (FORALL (x:RECEIVERS): receivers_done[x]) AND
+  %     (NOT (FORALL (x,y:RECEIVERS): votes[x]=votes[y])) -->
+  %       vaa_ok' = FALSE
   []
     % For the test THEOREMS below
     all_done:
@@ -423,14 +431,54 @@ system_obs : MODULE = system || observer;
 % checked for counterexamples with bmc.
 finish: THEOREM system_obs |- F(NOT not_done);
 
-% validity and agreement hold when the system is "done"
-%
-%   $ sal-bmc -v 1 -d 36 om1_cal_v4.sal vaa
-%   no counterexample between depths: [0, 36]
-%   192.36 secs
-%
-vaa: THEOREM system_obs |- G(vaa_ok);
+% Maximum fault assumption
+mfa(f: FAULTS): BOOLEAN =
+  FORALL (i,j: IDENTITY):
+    (f.faulty?[i] AND f.faulty?[j]) => i = j;
 
+% proved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal receivers_done
+receivers_done: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      receivers_done[r] => (mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
+   );
+
+% proved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal counter
+counter: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      counters[r] <= ixs[r]);
+
+% proved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l lemma_conj om1_fault.sal faulty_msg
+faulty_msg: LEMMA system_obs |-
+  G(   f.faulty?[source_id]
+    OR FORALL (i,j: IDENTITY):
+         (linked?(i,j) AND cal.msg[chan(i,j)] = faulty) => f.faulty?[i]);
+
+% proved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l faulty_msg om1_fault.sal faulty_relay
+faulty_relay: LEMMA system_obs |-
+  G(   f.faulty?[source_id]
+	  OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
+         buffer[r][y] = faulty => f.faulty?[y]);
+
+% unproved
+buffer_write_once: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      FORALL (i: RELAYS):
+           NOT linked?(i, r)
+        OR (linked?(i, r) AND buffer[r][i] /= missing AND null?(cal, chan(i, r)))
+        OR (linked?(i, r) AND buffer[r][i] = missing)
+   );
+
+% unproved
+candidate_in_buffer: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      EXISTS (y: RELAYS): buffer[r][y] = candidate[r]);
+
+% unproved
+vaa: THEOREM system_obs |- G(mfa(f) => vaa_ok);
 
 %=== Invariants ===
 
@@ -447,7 +495,7 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
 
 % proved:
 % sal-inf-bmc -v 1 --delta-path -i -ice -d 3 om1_fault.sal lemma_conj
-lemma_conj: LEMMA system |-
+lemma_conj: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
     AND global_time_not_null(t)
     AND missing_cal(cal)
@@ -470,9 +518,6 @@ relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
 % counterexample at depth 6, 8.29 secs
 time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
                                         % only advance as far as the relay broadcast
-% counterexample at depth 29, 2.61 secs
-recv_full_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_full[i]);
-
 % counterexample at depth 30, 4.44 secs
 recv_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
 
