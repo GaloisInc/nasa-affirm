@@ -1,0 +1,315 @@
+% smp.sal
+%
+% Simple Message Passing Model
+% version 1
+%
+% Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
+
+
+smp: CONTEXT =
+BEGIN
+
+
+%=== Nodes and IDs -----------------------------------------------===
+
+% IDs for nodes
+IDENTITY:  TYPE     = [0..1];
+
+% Static node IDs
+node_A: IDENTITY = 0;  % source
+node_B: IDENTITY = 1;  % reciever
+
+
+%=== Channels ----------------------------------------------------===
+
+% channel IDs
+%   1:  node_A -> node_B
+CHANNEL: TYPE = [1..1];
+
+linked?(i:IDENTITY, j:IDENTITY): BOOLEAN = i = node_A AND j = node_B;
+
+chan(i:IDENTITY, j:IDENTITY): CHANNEL = 1;  % there is only Zuul
+
+%=== Messages and Values -----------------------------------------===
+
+% values recieved by relays and receivers
+MESSAGE: TYPE = { good, missing, faulty };
+source_msg: MESSAGE = good;
+
+% Time is modeled by non-negative integers
+% -1 is reserved as an invalid time
+% -2 is reserved as an atomic "out-of-band" time
+TIME: TYPE = [-2..1];
+invalid_time: TIME = -1;
+atomic_time: TIME = -2;
+msg_delay: TIME = 1;
+
+
+%
+% Calendar Automata
+%
+% Calendar data structure for communication between nodes. The structure
+% allows for at most 1 message to be sent from any node to any other
+% at a given time.
+%
+CALENDAR: TYPE =
+  [# msg  : ARRAY CHANNEL of MESSAGE,  % contents of message
+     time : ARRAY CHANNEL of TIME      % time for delivery
+  #];
+
+empty_calendar: CALENDAR =
+  (# msg  := [[c:CHANNEL] missing],
+     time := [[c:CHANNEL] invalid_time]
+  #);
+
+FAULTS: TYPE = [# faulty? : ARRAY IDENTITY OF BOOLEAN #];
+
+uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): {m : MESSAGE | m /= missing };
+
+msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
+  IF f.faulty?[i] THEN
+    uninterp_msg(s, i, j)
+  ELSE
+    cal.msg[chan(i,j)]  % return correct message
+  ENDIF;
+
+% Helper functions for getting/setting the calendar
+null?(cal: CALENDAR, c: CHANNEL): BOOLEAN =
+  cal.msg[c] = missing AND cal.time[c] = invalid_time;
+
+% Is the given time the minimum among all valid times on the calendar?
+is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
+      (FORALL (c:CHANNEL): NOT null?(cal,c) => t <= cal.time[c])
+  AND (EXISTS (c:CHANNEL): NOT null?(cal,c) AND t = cal.time[c]);
+
+delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
+  cal.time[chan(i,j)];
+
+% Is there an event i -> j yet to occur at the given time?
+% Returns FALSE if
+%
+%     A) the pair i,j has no channel between them OR
+%     B) there is a pending atomic event.
+%
+node_event?(cal:CALENDAR, i:IDENTITY, j:IDENTITY, t:TIME): BOOLEAN =
+      linked?(i,j)
+  AND is_next_time?(cal,t)
+  AND NOT null?(cal,chan(i,j))
+  AND delivery(cal,i,j) = t;
+
+% is there an event yet to occur at the given time?
+event_pending?(cal:CALENDAR, t:TIME): BOOLEAN =
+  (EXISTS (c:CHANNEL): cal.msg[c] /= missing AND cal.time[c] = t);
+
+% is there an atomic event pending?
+atomic_pending?(cal: CALENDAR): BOOLEAN = event_pending?(cal, atomic_time);
+
+% Am I in atomic mode?
+i_am_atomic?(cal: CALENDAR, i: IDENTITY, t: TIME): BOOLEAN =
+      EXISTS (j: IDENTITY): linked?(i,j) AND cal.time[chan(j,i)] = atomic_time
+  AND t = atomic_time;
+
+% send a message with given delay
+msg_send_delta(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME, d:TIME): CALENDAR =
+  cal WITH .msg[chan(i,j)]  := m
+      WITH .time[chan(i,j)] := t + d;
+
+% default msg_send function has 'msg_delay' delay
+msg_send(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME): CALENDAR =
+  msg_send_delta(cal,i,j,m,t,msg_delay);
+
+% add a 'preemtive' message (or interrupt) to the calendar. This action
+% prevents transitions from occuring except in the 'atomic' section of the
+% calling module.
+msg_send_interrupt(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
+  msg_send_delta(cal,i,j,good,atomic_time,0);
+
+msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
+  cal WITH .msg[chan(i,j)]  := missing
+      WITH .time[chan(i,j)] := invalid_time;
+
+
+%===----------------------------------------------------------------===
+%       Transition System
+%===----------------------------------------------------------------===
+
+%
+% The 'clock' module gives the general its message and manages the
+% advance of time.
+clock: MODULE =
+BEGIN
+    GLOBAL
+      cal: CALENDAR,
+      t:   TIME,
+      f:   FAULTS
+    INPUT
+      node_A_done: BOOLEAN,
+      node_B_done: BOOLEAN
+INITIALIZATION
+    cal = empty_calendar;
+    t = 0;
+TRANSITION
+    [
+      advance_time:
+        NOT is_next_time?(cal,t) --> t' IN { s:TIME | is_next_time?(cal,s) }
+    []
+      stutter:
+        node_A_done AND node_B_done -->  % nothing
+    ]
+END;
+
+
+node_A: MODULE =
+BEGIN
+    GLOBAL cal: CALENDAR
+    INPUT  t: TIME
+    OUTPUT node_A_done: BOOLEAN
+INITIALIZATION
+    node_A_done = FALSE;
+TRANSITION
+    [
+      send:
+      NOT node_A_done AND t = 0 -->
+        cal' = msg_send(cal, node_A, node_B, source_msg, t);
+        node_A_done' = TRUE;
+    ]
+END;
+
+
+node_B: MODULE =
+BEGIN
+    GLOBAL
+        cal: CALENDAR
+    INPUT
+        t: TIME,
+        f: FAULTS
+    OUTPUT
+        node_B_done: BOOLEAN,
+        node_B_latch: MESSAGE
+INITIALIZATION
+    node_B_done  = FALSE;
+    node_B_latch = missing;
+TRANSITION
+    [
+      recv:
+      NOT node_B_done AND node_event?(cal, node_A, node_B, t) -->
+        node_B_done'  = TRUE;
+        node_B_latch' = msg(t, cal, f, node_A, node_B);
+        cal'          = msg_consume(cal, node_A, node_B);
+    ]
+END;
+
+
+%===----------------------------------------------------------------===
+%       System
+%===----------------------------------------------------------------===
+
+% asyncronous composition is used to better model message passing
+system: MODULE =
+        clock
+     [] node_A
+     [] node_B;
+
+
+%===----------------------------------------------------------------===
+%       Syncronous Observer
+%===----------------------------------------------------------------===
+
+observer: MODULE =
+BEGIN
+  INPUT
+    node_A_done: BOOLEAN,
+    node_B_done: BOOLEAN,
+    node_B_latch: MESSAGE,
+    f: FAULTS
+  OUTPUT
+    aok: BOOLEAN,
+    not_done: BOOLEAN
+INITIALIZATION
+  aok = TRUE;
+  not_done = TRUE
+TRANSITION
+  [
+    no_validity:
+      node_B_done AND (NOT node_B_latch=good) -->
+        aok' = FALSE
+  []
+    all_done:
+      node_A_done AND node_B_done -->
+        not_done' = FALSE
+  []
+    ELSE -->
+  ]
+END;
+
+
+system_obs : MODULE = system || observer;
+
+
+%===--------------------------------------------------------------===
+%       Verification
+%===--------------------------------------------------------------===
+
+%===  Main Theorems  ===
+
+% system eventually finishes (at which point vaa can be checked).
+% Alternatively, the safety property 'not_all_done' listed below can be
+% checked for counterexamples with bmc.
+finish: THEOREM system_obs |- F(NOT not_done);
+
+% Maximum fault assumption
+mfa(f: FAULTS): BOOLEAN = FORALL (i: IDENTITY): NOT f.faulty?[i];
+
+% unproved
+% asserts that there are only two regimes:
+%   1. where latch is emtpy
+%   2. where latch is full and the incoming channel that feeds latch is empty
+latch_write_once: LEMMA system_obs |-
+  G(node_B_latch /= missing => null?(cal, 1));
+
+
+% unproved
+vaa: THEOREM system_obs |- G(mfa(f) => aok);
+
+%=== Invariants ===
+
+global_time_not_null(t: TIME): BOOLEAN = t /= -1;
+
+monotonic_time(cal: CALENDAR, t: TIME): BOOLEAN =
+ FORALL (s: TIME): is_next_time?(cal, s) => s = atomic_time OR s >= t;
+
+missing_cal(cal: CALENDAR): BOOLEAN =
+  FORALL (i: CHANNEL): cal.msg[i] = missing <=> cal.time[i] = invalid_time;
+
+unique_atomic(cal: CALENDAR): BOOLEAN =
+  FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
+
+% proved:
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 3 smp.sal lemma_conj
+lemma_conj: LEMMA system_obs |-
+  G(    monotonic_time(cal, t)
+    AND global_time_not_null(t)
+    AND missing_cal(cal)
+    AND unique_atomic(cal)
+	 );
+
+% TODO: state disjunctive invariant for the systems phases
+
+
+%===--------------------------------------------------------------===
+%       Tests
+%===--------------------------------------------------------------===
+
+% TESTS for bounded model checker; these are non-THEOREMS
+
+% components finish eventually:
+node_A_test:    THEOREM system |- G(NOT node_A_done);
+node_B_test:    THEOREM system |- G(NOT node_B_done);
+
+% time advances past 0
+time_test: THEOREM system |- G(t < 1);
+
+% everyone finishes eventually:
+all_done_test: THEOREM system_obs |- G(not_done);
+
+END
