@@ -460,7 +460,7 @@ faulty_msg: LEMMA system_obs |-
 % sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l faulty_msg om1_fault.sal faulty_relay
 faulty_relay: LEMMA system_obs |-
   G(   f.faulty?[source_id]
-	  OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
+    OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
          buffer[r][y] = faulty => f.faulty?[y]);
 
 % unproved
@@ -500,9 +500,15 @@ lemma_conj: LEMMA system_obs |-
     AND global_time_not_null(t)
     AND missing_cal(cal)
     AND unique_atomic(cal)
-	 );
+   );
 
-% TODO: state disjunctive invariant for the systems phases
+% unproven
+%
+fault_propagation: LEMMA system_obs |-
+  G(FORALL (i:RECEIVERS):
+      FORALL (j:RELAYS):
+        buffer[i][j] = faulty =>
+        f.faulty?[j] OR f.faulty?[source_id]);
 
 
 %===--------------------------------------------------------------===
