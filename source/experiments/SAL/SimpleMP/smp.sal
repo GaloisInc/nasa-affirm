@@ -243,7 +243,47 @@ TRANSITION
 END;
 
 
+%LATCH_STATES: TYPE = { ls1, ls2, ls3, ls4 };
+%
+%latch_observer: MODULE =
+%BEGIN
+%  INPUT
+%    node_B_latch:      MESSAGE,
+%    node_B_latch_prev: MESSAGE
+%  OUTPUT
+%    latch_state: LATCH_STATES
+%INITIALIZATION
+%  node_B_latch_prev = missing;
+%  latch_state = ls1;
+%DEFINITION
+%  node_B_latch_prev' = node_B_latch;
+%TRANSITION
+%  [
+%    ls1:
+%      node_B_latch = missing AND node_B_latch_prev = missing -->
+%        latch_state' = ls1;
+%  []
+%    ls2:
+%      node_B_latch /= missing AND node_B_latch_prev = missing -->
+%        latch_state' = ls2;
+%  []
+%    ls3:
+%      node_B_latch /= missing AND node_B_latch_prev /= missing AND
+%node_B_latch = node_B_latch_prev -->
+%        latch_state' = ls3;
+%  []
+%    %% start here
+%    ls4:
+%      node_B_latch = missing AND node_B_latch_prev = missing -->
+%        latch_state' = ls4;
+%  []
+%    ELSE -->
+%  ]
+%END;
+
+
 system_obs : MODULE = system || observer;
+%system_obs : MODULE = system || observer || latch_observer;
 
 
 %===--------------------------------------------------------------===
@@ -257,21 +297,32 @@ system_obs : MODULE = system || observer;
 % checked for counterexamples with bmc.
 finish: THEOREM system_obs |- F(NOT not_done);
 
+
+% unproved
+%
+% Lemma talks about abstract states that are managed by the 'latch_observer'
+% module.
+%
+% Abstract states:
+%   S1. latch was missing last step, is missing now
+%   S2. missing last step, full now
+%   S3. full last step, full now, value unchanged
+%   S4. full last step, empty now
+%
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 4 smp.sal latch_write_once
+%latch_write_once: LEMMA system_obs |-
+%  G(LS1 OR LS2 OR LS3 OR LS4)
+
 % Maximum fault assumption
 mfa(f: FAULTS): BOOLEAN = FORALL (i: IDENTITY): NOT f.faulty?[i];
 
-% unproved
-% asserts that there are only two regimes:
-%   1. where latch is emtpy
-%   2. where latch is full and the incoming channel that feeds latch is empty
-latch_write_once: LEMMA system_obs |-
-  G(node_B_latch /= missing => null?(cal, 1));
-
-
-% unproved
+% proved: inductive!
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l fault_propagation smp.sal vaa
 vaa: THEOREM system_obs |- G(mfa(f) => aok);
 
 %=== Invariants ===
+
+
 
 global_time_not_null(t: TIME): BOOLEAN = t /= -1;
 
@@ -284,16 +335,26 @@ missing_cal(cal: CALENDAR): BOOLEAN =
 unique_atomic(cal: CALENDAR): BOOLEAN =
   FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
 
-% proved:
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 3 smp.sal lemma_conj
+
+% XXX not general!
+% proved: inductive!
+node_B_sets_latch(nbdone: BOOLEAN, nblatch: MESSAGE): BOOLEAN =
+  nbdone => nblatch /= missing;
+
+% XXX not general!
+% proved: inductive!
+fault_propagation: LEMMA system_obs |-
+  G(node_B_latch = faulty => f.faulty?[0]);
+
+% proved: inductive
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 smp.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
     AND global_time_not_null(t)
     AND missing_cal(cal)
     AND unique_atomic(cal)
-	 );
-
-% TODO: state disjunctive invariant for the systems phases
+    AND node_B_sets_latch(node_B_done, node_B_latch)
+   );
 
 
 %===--------------------------------------------------------------===
@@ -303,13 +364,17 @@ lemma_conj: LEMMA system_obs |-
 % TESTS for bounded model checker; these are non-THEOREMS
 
 % components finish eventually:
+% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal node_A_test
 node_A_test:    THEOREM system |- G(NOT node_A_done);
+% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal node_B_test
 node_B_test:    THEOREM system |- G(NOT node_B_done);
 
 % time advances past 0
+% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal time_test
 time_test: THEOREM system |- G(t < 1);
 
 % everyone finishes eventually:
+% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal all_done_test
 all_done_test: THEOREM system_obs |- G(not_done);
 
 END
