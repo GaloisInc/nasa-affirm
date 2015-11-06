@@ -313,9 +313,21 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
 node_sets_latch(nbdone: BOOLEAN, nblatch: MESSAGE): BOOLEAN =
   nbdone => nblatch /= missing;
 
+% proved: inductive
+afault: LEMMA system_obs |-
+  G(cal.msg[chan(node_A, node_B)] = faulty => f.faulty?[node_A]);
+
+% proved: inductive
+abfault: LEMMA system_obs |-
+  G(cal.msg[chan(node_B, node_C)] = faulty =>
+      f.faulty?[node_A] OR f.faulty?[node_B]);
+
 % XXX not general!
 % proved: 6-inductive
 % sal-inf-bmc -v 1 --delta-path -i -ice -d 6 -l lemma_conj smp3.sal fault_propagation
+%
+% better:
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l lemma_conj -l afault -l abfault smp3.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(node_C_latch = faulty => f.faulty?[1] OR f.faulty?[0]);
 
