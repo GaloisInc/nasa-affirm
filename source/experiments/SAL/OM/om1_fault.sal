@@ -502,14 +502,26 @@ lemma_conj: LEMMA system_obs |-
     AND unique_atomic(cal)
    );
 
-% unproven
-%
+% proved: inductive!
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l relay_cal_fault om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(FORALL (i:RECEIVERS):
       FORALL (j:RELAYS):
         buffer[i][j] = faulty =>
         f.faulty?[j] OR f.faulty?[source_id]);
 
+% proved: inductive!
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal gen_cal_fault
+gen_cal_fault: LEMMA system_obs |-
+  G(FORALL (i: RELAYS):
+      cal.msg[chan(source_id, i)] = faulty => f.faulty?[source_id]);
+
+% proved: inductive!
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l gen_cal_fault om1_fault.sal relay_cal_fault
+relay_cal_fault: LEMMA system_obs |-
+  G(FORALL (i: RECEIVERS):
+      FORALL (j: RELAYS):
+        cal.msg[chan(j,i)] = faulty => f.faulty?[j] OR f.faulty?[source_id]);
 
 %===--------------------------------------------------------------===
 %       Tests
