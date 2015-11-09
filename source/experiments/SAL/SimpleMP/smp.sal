@@ -20,7 +20,7 @@ node_A: IDENTITY = 0;  % source
 node_B: IDENTITY = 1;  % reciever
 
 
-%=== Channels ----------------------------------------------------===
+%=== Faults ------------------------------------------------------===
 
 FAULTS: TYPE = ARRAY IDENTITY OF BOOLEAN;
 
@@ -61,7 +61,6 @@ good_msg: MESSAGE = 0;
 missing:  MESSAGE = -1;
 
 % these messages are emitted by the faulty nodes
-% FAULT_MESSAGE: TYPE = { x: MESSAGE | x >= 0 AND x <= 3 };
 FAULT_MESSAGE: TYPE = { x: MESSAGE | x >= 0 };
 uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): FAULT_MESSAGE;
 
