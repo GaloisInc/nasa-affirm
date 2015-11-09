@@ -22,6 +22,11 @@ node_B: IDENTITY = 1;  % reciever
 
 %=== Channels ----------------------------------------------------===
 
+FAULTS: TYPE = ARRAY IDENTITY OF BOOLEAN;
+
+
+%=== Channels ----------------------------------------------------===
+
 % channel IDs
 %   1:  node_A -> node_B
 CHANNEL: TYPE = [1..1];
@@ -30,11 +35,8 @@ linked?(i:IDENTITY, j:IDENTITY): BOOLEAN = i = node_A AND j = node_B;
 
 chan(i:IDENTITY, j:IDENTITY): CHANNEL = 1;  % there is only Zuul
 
-%=== Messages and Values -----------------------------------------===
 
-% values recieved by relays and receivers
-MESSAGE: TYPE = { good, missing, faulty };
-source_msg: MESSAGE = good;
+%=== Time --------------------------------------------------------===
 
 % Time is modeled by non-negative integers
 % -1 is reserved as an invalid time
@@ -45,13 +47,33 @@ atomic_time: TIME = -2;
 msg_delay: TIME = 1;
 
 
+%=== Messages and Values -----------------------------------------===
+
+% values recieved by relays and receivers
 %
-% Calendar Automata
-%
+% MESSAGES is modeled as an uninterpreted type to support arbitrary
+% faulty values
+
+%MESSAGE: TYPE = { m: INTEGER | m >= -1 AND m <= 3 };
+MESSAGE: TYPE = { m: INTEGER | m >= -1 };
+% some named messages
+good_msg: MESSAGE = 0;
+missing:  MESSAGE = -1;
+
+% these messages are emitted by the faulty nodes
+% FAULT_MESSAGE: TYPE = { x: MESSAGE | x >= 0 AND x <= 3 };
+FAULT_MESSAGE: TYPE = { x: MESSAGE | x >= 0 };
+uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): FAULT_MESSAGE;
+
+is_faulty_msg?(m: MESSAGE): BOOLEAN = m > 0;
+
+
+%=== Calendar Automata -------------------------------------------===
+
 % Calendar data structure for communication between nodes. The structure
 % allows for at most 1 message to be sent from any node to any other
 % at a given time.
-%
+
 CALENDAR: TYPE =
   [# msg  : ARRAY CHANNEL of MESSAGE,  % contents of message
      time : ARRAY CHANNEL of TIME      % time for delivery
@@ -62,15 +84,13 @@ empty_calendar: CALENDAR =
      time := [[c:CHANNEL] invalid_time]
   #);
 
-FAULTS: TYPE = [# faulty? : ARRAY IDENTITY OF BOOLEAN #];
-
-uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): {m : MESSAGE | m /= missing };
+% Calendar API
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
-  IF f.faulty?[i] THEN
-    uninterp_msg(s, i, j)
+  IF f[i] THEN
+    uninterp_msg(s, i, j)  % return a faulty message
   ELSE
-    cal.msg[chan(i,j)]  % return correct message
+    cal.msg[chan(i,j)]     % return correct message
   ENDIF;
 
 % Helper functions for getting/setting the calendar
@@ -122,7 +142,7 @@ msg_send(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME): CALENDAR =
 % prevents transitions from occuring except in the 'atomic' section of the
 % calling module.
 msg_send_interrupt(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
-  msg_send_delta(cal,i,j,good,atomic_time,0);
+  msg_send_delta(cal,i,j,good_msg,atomic_time,0);
 
 msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
   cal WITH .msg[chan(i,j)]  := missing
@@ -141,7 +161,8 @@ BEGIN
     GLOBAL
       cal: CALENDAR,
       t:   TIME,
-      f:   FAULTS
+      % Non-deterministically assign which nodes are faulty
+      faulty?: FAULTS
     INPUT
       node_A_done: BOOLEAN,
       node_B_done: BOOLEAN
@@ -170,7 +191,7 @@ TRANSITION
     [
       send:
       NOT node_A_done AND t = 0 -->
-        cal' = msg_send(cal, node_A, node_B, source_msg, t);
+        cal' = msg_send(cal, node_A, node_B, good_msg, t);
         node_A_done' = TRUE;
     ]
 END;
@@ -182,7 +203,7 @@ BEGIN
         cal: CALENDAR
     INPUT
         t: TIME,
-        f: FAULTS
+        faulty?: FAULTS
     OUTPUT
         node_B_done: BOOLEAN,
         node_B_latch: MESSAGE
@@ -194,7 +215,7 @@ TRANSITION
       recv:
       NOT node_B_done AND node_event?(cal, node_A, node_B, t) -->
         node_B_done'  = TRUE;
-        node_B_latch' = msg(t, cal, f, node_A, node_B);
+        node_B_latch' = msg(t, cal, faulty?, node_A, node_B);
         cal'          = msg_consume(cal, node_A, node_B);
     ]
 END;
@@ -220,8 +241,7 @@ BEGIN
   INPUT
     node_A_done: BOOLEAN,
     node_B_done: BOOLEAN,
-    node_B_latch: MESSAGE,
-    f: FAULTS
+    node_B_latch: MESSAGE
   OUTPUT
     aok: BOOLEAN,
     not_done: BOOLEAN
@@ -231,7 +251,7 @@ INITIALIZATION
 TRANSITION
   [
     no_validity:
-      node_B_done AND (NOT node_B_latch=good) -->
+      node_B_done AND (node_B_latch /= good_msg) -->
         aok' = FALSE
   []
     all_done:
@@ -243,86 +263,18 @@ TRANSITION
 END;
 
 
-%LATCH_STATES: TYPE = { ls1, ls2, ls3, ls4 };
-%
-%latch_observer: MODULE =
-%BEGIN
-%  INPUT
-%    node_B_latch:      MESSAGE,
-%    node_B_latch_prev: MESSAGE
-%  OUTPUT
-%    latch_state: LATCH_STATES
-%INITIALIZATION
-%  node_B_latch_prev = missing;
-%  latch_state = ls1;
-%DEFINITION
-%  node_B_latch_prev' = node_B_latch;
-%TRANSITION
-%  [
-%    ls1:
-%      node_B_latch = missing AND node_B_latch_prev = missing -->
-%        latch_state' = ls1;
-%  []
-%    ls2:
-%      node_B_latch /= missing AND node_B_latch_prev = missing -->
-%        latch_state' = ls2;
-%  []
-%    ls3:
-%      node_B_latch /= missing AND node_B_latch_prev /= missing AND
-%node_B_latch = node_B_latch_prev -->
-%        latch_state' = ls3;
-%  []
-%    %% start here
-%    ls4:
-%      node_B_latch = missing AND node_B_latch_prev = missing -->
-%        latch_state' = ls4;
-%  []
-%    ELSE -->
-%  ]
-%END;
-
-
+% transition system + synchronous observer
 system_obs : MODULE = system || observer;
-%system_obs : MODULE = system || observer || latch_observer;
 
 
 %===--------------------------------------------------------------===
 %       Verification
 %===--------------------------------------------------------------===
 
-%===  Main Theorems  ===
-
-% system eventually finishes (at which point vaa can be checked).
-% Alternatively, the safety property 'not_all_done' listed below can be
-% checked for counterexamples with bmc.
-finish: THEOREM system_obs |- F(NOT not_done);
-
-
-% unproved
-%
-% Lemma talks about abstract states that are managed by the 'latch_observer'
-% module.
-%
-% Abstract states:
-%   S1. latch was missing last step, is missing now
-%   S2. missing last step, full now
-%   S3. full last step, full now, value unchanged
-%   S4. full last step, empty now
-%
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 4 smp.sal latch_write_once
-%latch_write_once: LEMMA system_obs |-
-%  G(LS1 OR LS2 OR LS3 OR LS4)
-
-% Maximum fault assumption
-mfa(f: FAULTS): BOOLEAN = FORALL (i: IDENTITY): NOT f.faulty?[i];
-
-% proved: inductive!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l fault_propagation smp.sal vaa
-vaa: THEOREM system_obs |- G(mfa(f) => aok);
 
 %=== Invariants ===
 
-
+%% Predicates
 
 global_time_not_null(t: TIME): BOOLEAN = t /= -1;
 
@@ -335,46 +287,49 @@ missing_cal(cal: CALENDAR): BOOLEAN =
 unique_atomic(cal: CALENDAR): BOOLEAN =
   FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
 
-
 % XXX not general!
-% proved: inductive!
 node_B_sets_latch(nbdone: BOOLEAN, nblatch: MESSAGE): BOOLEAN =
   nbdone => nblatch /= missing;
 
-% XXX not general!
-% proved: inductive!
+
+%% LEMMAs
+
+% proved:
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj smp.sal afault
+afault: LEMMA system_obs |-
+  G(is_faulty_msg?(cal.msg[chan(node_A, node_B)]) => faulty?[node_A]);
+
+% XXX not very general! it depends on knowing how messages are sent through
+% the system and saved to specific node-local variables
+%
+% proved:
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l afault smp fault_propagation
 fault_propagation: LEMMA system_obs |-
-  G(node_B_latch = faulty => f.faulty?[0]);
+  G(   node_B_latch = good_msg
+    OR node_B_latch = missing
+    OR faulty?[node_A]
+   );
 
 % proved: inductive
 % sal-inf-bmc -v 1 --delta-path -i -ice -d 1 smp.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
-  G(    monotonic_time(cal, t)
-    AND global_time_not_null(t)
-    AND missing_cal(cal)
-    AND unique_atomic(cal)
-    AND node_B_sets_latch(node_B_done, node_B_latch)
+  G(monotonic_time(cal, t)
+     AND global_time_not_null(t)
+     AND missing_cal(cal)
+     AND unique_atomic(cal)
+     AND node_B_sets_latch(node_B_done, node_B_latch)
    );
 
 
-%===--------------------------------------------------------------===
-%       Tests
-%===--------------------------------------------------------------===
+%===  Main Theorems  ===
 
-% TESTS for bounded model checker; these are non-THEOREMS
+% Maximum fault assumption
+mfa(f: FAULTS): BOOLEAN = FORALL (i: IDENTITY): NOT f[i];
 
-% components finish eventually:
-% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal node_A_test
-node_A_test:    THEOREM system |- G(NOT node_A_done);
-% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal node_B_test
-node_B_test:    THEOREM system |- G(NOT node_B_done);
-
-% time advances past 0
-% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal time_test
-time_test: THEOREM system |- G(t < 1);
-
-% everyone finishes eventually:
-% counter-example: sal-inf-bmc -v 1 -d 10 smp.sal all_done_test
-all_done_test: THEOREM system_obs |- G(not_done);
+% Validity and Agreement
+%
+% proved!
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l fault_propagation smp.sal vaa
+vaa: THEOREM system_obs |- G(mfa(faulty?) => aok);
 
 END
