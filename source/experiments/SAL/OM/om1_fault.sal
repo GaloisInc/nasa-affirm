@@ -19,10 +19,6 @@
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 %         Lee Pike                            , Galois Inc. (2015)
 
-% TODOS:
-% * make message type infinite
-% * allow general to send non-good message (change precondition for no_validity)
-
 
 om1_fault: CONTEXT =
 BEGIN
@@ -35,10 +31,13 @@ IDENTITY:  TYPE     = [0..6];  % 1 source, 3 relays, 3 receivers
 
 % Static node IDs
 source_id: IDENTITY = 0;
+
 relay1_id: IDENTITY = 1;
 relay2_id: IDENTITY = 2;
 relay3_id: IDENTITY = 3;
 RELAYS: TYPE = [1..3];
+num_relays: INTEGER = 3;
+
 receiver1_id: IDENTITY = 4;
 receiver2_id: IDENTITY = 5;
 receiver3_id: IDENTITY = 6;
@@ -76,29 +75,48 @@ chan(i:IDENTITY, j:IDENTITY): CHANNEL =
     13 + (j-4)
   ENDIF;
 
-%=== Messages and Values -----------------------------------------===
 
-% values recieved by relays and receivers
-MESSAGE: TYPE = { good, missing, faulty };
-source_msg: MESSAGE = good;
+%=== Time --------------------------------------------------------===
 
 % Time is modeled by non-negative integers
 % -1 is reserved as an invalid time
 % -2 is reserved as an atomic "out-of-band" time
-TIME: TYPE = [-2..5];  % upper bound of TIME is determined at compile time
-%TIME: TYPE = {i: INTEGER | TRUE };
+TIME: TYPE = [-2..5];
 invalid_time: TIME = -1;
 atomic_time: TIME = -2;
 msg_delay: TIME = 1;
 
 
+%=== Faults ------------------------------------------------------===
+
+FAULTS: TYPE = ARRAY IDENTITY OF BOOLEAN;
+
+
+%=== Messages and Values -----------------------------------------===
+
+% values recieved by relays and receivers
 %
-% Calendar Automata
-%
+% MESSAGES is modeled as an uninterpreted type to support arbitrary
+% faulty values
+
+MESSAGE: TYPE = { m: INTEGER | m >= -1 };
+% some named messages
+good_msg: MESSAGE = 0;
+missing:  MESSAGE = -1;
+
+% these messages are emitted by the faulty nodes
+FAULT_MESSAGE: TYPE = { x: MESSAGE | x >= 0 };
+uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): FAULT_MESSAGE;
+
+is_faulty_msg?(m: MESSAGE): BOOLEAN = m > 0;
+
+
+%=== Calendar Automata -------------------------------------------===
+
 % Calendar data structure for communication between nodes. The structure
 % allows for at most 1 message to be sent from any node to any other
 % at a given time.
-%
+
 CALENDAR: TYPE =
   [# msg  : ARRAY CHANNEL of MESSAGE,  % contents of message
      time : ARRAY CHANNEL of TIME      % time for delivery
@@ -109,15 +127,15 @@ empty_calendar: CALENDAR =
      time := [[c:CHANNEL] invalid_time]
   #);
 
-FAULTS: TYPE = [# faulty? : ARRAY IDENTITY OF BOOLEAN #];
 
-uninterp_msg(x: TIME, i: IDENTITY, j: IDENTITY): {m : MESSAGE | m /= missing };
+%=== Calendar API ------------------------------------------------===
+
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
-  IF f.faulty?[i] THEN
-    uninterp_msg(s, i, j)
+  IF f[i] THEN
+    uninterp_msg(s, i, j)  % return uninterpreted message
   ELSE
-    cal.msg[chan(i,j)]  % return correct message
+    cal.msg[chan(i,j)]     % return correct message
   ENDIF;
 
 % Helper functions for getting/setting the calendar
@@ -132,25 +150,25 @@ is_next_time?(cal:CALENDAR, t:TIME): BOOLEAN =
 delivery(cal: CALENDAR, i:IDENTITY, j:IDENTITY): TIME =
   cal.time[chan(i,j)];
 
-% Is there an event i -> j yet to occur at the given time?
+% Is there a regular event i -> j yet to occur at the given time?
 % Returns FALSE if
 %
 %     A) the pair i,j has no channel between them OR
-%     B) there is a pending atomic event.
+%     B) the current time is 'atomic_time'
 %
 node_event?(cal:CALENDAR, i:IDENTITY, j:IDENTITY, t:TIME): BOOLEAN =
       linked?(i,j)
   AND is_next_time?(cal,t)
-  % AND cal.msg[chan(i,j)] /= missing
   AND NOT null?(cal,chan(i,j))
-  AND delivery(cal,i,j) = t;
+  AND delivery(cal,i,j) = t
+  AND t /= atomic_time;
 
 % is there an event yet to occur at the given time?
 event_pending?(cal:CALENDAR, t:TIME): BOOLEAN =
   (EXISTS (c:CHANNEL): cal.msg[c] /= missing AND cal.time[c] = t);
 
-% is there an atomic event pending?
-atomic_pending?(cal: CALENDAR): BOOLEAN = event_pending?(cal, atomic_time);
+% is the atomic lock free?
+atomic_free?(cal: CALENDAR): BOOLEAN = NOT event_pending?(cal, atomic_time);
 
 % Am I in atomic mode?
 i_am_atomic?(cal: CALENDAR, i: IDENTITY, t: TIME): BOOLEAN =
@@ -164,13 +182,13 @@ msg_send_delta(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME, d:TIME
 
 % default msg_send function has 'msg_delay' delay
 msg_send(cal: CALENDAR, i: IDENTITY, j:IDENTITY, m:MESSAGE, t:TIME): CALENDAR =
-  msg_send_delta(cal,i,j,m,t,msg_delay);
+  msg_send_delta(cal, i, j, m, t, msg_delay);
 
 % add a 'preemtive' message (or interrupt) to the calendar. This action
 % prevents transitions from occuring except in the 'atomic' section of the
 % calling module.
 msg_send_interrupt(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
-  msg_send_delta(cal,i,j,good,atomic_time,0);
+  msg_send_delta(cal, i, j, good_msg, atomic_time, 0);
 
 msg_consume(cal: CALENDAR, i: IDENTITY, j:IDENTITY): CALENDAR =
   cal WITH .msg[chan(i,j)]  := missing
@@ -211,7 +229,7 @@ TRANSITION
     ]
 END;
 
-% 'source' sends a message (source_msg) to all relays
+% 'source' sends a message (good_msg) to all relays
 source: MODULE =
 BEGIN
     GLOBAL cal: CALENDAR
@@ -224,11 +242,11 @@ TRANSITION
       source_broadcast:
       NOT source_done AND t = 0 -->
         cal' = LET cal1:CALENDAR = msg_send(cal,  source_id, relay1_id,
-                                            source_msg, t) IN
+                                            good_msg, t) IN
                LET cal2:CALENDAR = msg_send(cal1, source_id, relay2_id,
-                                            source_msg, t) IN
+                                            good_msg, t) IN
                                    msg_send(cal2, source_id, relay3_id,
-                                            source_msg, t);
+                                            good_msg, t);
         source_done' = TRUE
     ]
 END;
@@ -254,10 +272,14 @@ TRANSITION
     ]
 END;
 
-% receiving means waiting for all relays to send their messages
-% voting  means waiting on the ivote machine to return an answer
-% done       means vote has been computed
-RECEIVER_MODES: TYPE = {receiving, voting, done};
+% Receiver modes:
+%
+%   - 'receiving' message buffer is not yet full
+%   - 'waiting'   buffer is full, waiting to acquire atomic lock
+%   - 'voting'    computing majority vote over the buffer
+%   - 'done'      voting is complete and 'vote' is set with result
+%
+RECEIVER_MODES: TYPE = {receiving, waiting, voting, done};
 
 receiver[p:RECEIVERS]: MODULE =
 BEGIN
@@ -273,6 +295,7 @@ BEGIN
         mode: RECEIVER_MODES,
         critical: BOOLEAN,
         buffer: ARRAY RELAYS of MESSAGE,
+        buffer_size: [0..num_relays],
         candidate: MESSAGE,
         pc: [0..5]
 INITIALIZATION
@@ -281,41 +304,54 @@ INITIALIZATION
     receiver_done = FALSE;
     vote = missing;
     % locals
-    buffer = [[r:RELAYS] missing];
+    buffer = [[r:RELAYS] missing];  % init empty buffer
+    buffer_size = 0;
     candidate = missing;
     counter = 0;
     ix = 1;
     pc = 0;
 TRANSITION
     [
-      % rec'v message from relay
-      % If buffer is full and mutex is free, then enter the vote section. The
-      % mutex is freed in the 'receiver_exit' transition.
-      ([] (i:RELAYS):
-        receiver_recv:
-        mode = receiving AND node_event?(cal, i, p, t) -->
-          buffer'[i] = IF buffer[i] = missing
-                         THEN msg(t, cal, f, i, p)
-	  										 ELSE buffer[i] % should never happen
-											 ENDIF;
-          % TODO: this is kludgy
-          %       full_buffer?(ARRAY RELAYS of MESSAGE): BOOLEAN
-          cal' = IF (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
-                 THEN
-                   LET cal1:CALENDAR = msg_consume(cal, i, p) IN
-                   msg_send_interrupt(cal1, p, p)
-                 ELSE
-                   msg_consume(cal, i, p)
-                 ENDIF;
-          mode' = IF  (FORALL (r:RELAYS): buffer'[r] /= missing) AND NOT atomic_pending?(cal)
-                  THEN voting ELSE mode ENDIF;
+      %----------------------------------------------------------------
+      % Receive a message from a relay
+      %
+      % If buffer is full and mutex is free, then enter the vote
+      % section. The mutex is freed in the 'receiver_exit' transition.
+      %----------------------------------------------------------------
 
-       )
+   ([] (i:RELAYS):
+      receiver_recv:
+      mode = receiving AND node_event?(cal, i, p, t) -->
+        buffer'[i] = IF buffer[i] = missing
+                       THEN msg(t, cal, f, i, p)
+                       ELSE buffer[i]             % drop message if buffer[i] is full
+                     ENDIF;
+        buffer_size' = IF buffer[i] = missing
+                         THEN buffer_size + 1
+                         ELSE buffer_size
+                       ENDIF;
+        cal'  = msg_consume(cal, i, p);
+        mode' = IF buffer_size' = num_relays     % change modes when buffer is full
+                  THEN waiting
+                  ELSE receiving
+                ENDIF;
+      )
     []
+      %----------------------------------------------------------------
+      % When 'buffer' is full and the atomic lock is free, send a self-
+      % message with delivery 'atomic_time'. This acquires the atomic
+      % lock so the following transitions are enabled.
+      %----------------------------------------------------------------
 
-    %
-    % The majority vote logic is unrolled in the following transitions
-    %
+      activate_vote:
+      mode = waiting AND atomic_free?(cal) -->
+          cal' = msg_send_interrupt(cal, p, p);
+          mode' = voting;
+    []
+      %----------------------------------------------------------------
+      % The majority vote logic is unrolled in the following
+      % transitions
+      %----------------------------------------------------------------
 
       receiver_vote_0:
       mode = voting AND pc = 0 AND i_am_atomic?(cal, p, t) -->
@@ -327,20 +363,21 @@ TRANSITION
       receiver_vote_loop:
       mode = voting AND pc > 0 AND 1 <= ix AND ix <= 3 AND i_am_atomic?(cal, p, t) -->  % 3 = max_relay_id
         candidate' = IF counter = 0
-									 	   THEN buffer[ix]
+                       THEN buffer[ix]
                        ELSE candidate
                     ENDIF;
         counter'   = IF buffer[ix] = candidate
                        THEN counter+1
                      ELSIF counter = 0
                        THEN 0
-                     ELSE counter-1 ENDIF;
+                       ELSE counter-1
+                     ENDIF;
         ix' = ix + 1;
         pc' = pc + 1
     []
         receiver_exit:
         mode = voting AND pc > 0 AND ix = 4 AND i_am_atomic?(cal, p, t) -->
-          cal' = msg_consume(cal, p, p);  % release the mutex
+          cal' = msg_consume(cal, p, p);  % release the atomic lock
           vote' = candidate;
           mode' = done;
           receiver_done' = TRUE
@@ -393,11 +430,12 @@ TRANSITION
   [
     no_validity:
       (FORALL (x:RECEIVERS): receivers_done[x]
-         AND (NOT votes[x]=good)
-				 AND (NOT f.faulty?[source_id])
-		  )
+         AND (NOT votes[x]=good_msg)
+         AND (NOT f[source_id])
+      )
         -->
         vaa_ok' = FALSE
+  % TODO - add agrement back in!
   % []
   %   no_agreement:
   %     (FORALL (x:RECEIVERS): receivers_done[x]) AND
@@ -424,61 +462,6 @@ system_obs : MODULE = system || observer;
 %       Verification
 %===--------------------------------------------------------------===
 
-%===  Main Theorems  ===
-
-% system eventually finishes (at which point vaa can be checked).
-% Alternatively, the safety property 'not_all_done' listed below can be
-% checked for counterexamples with bmc.
-finish: THEOREM system_obs |- F(NOT not_done);
-
-% Maximum fault assumption
-mfa(f: FAULTS): BOOLEAN =
-  FORALL (i,j: IDENTITY):
-    (f.faulty?[i] AND f.faulty?[j]) => i = j;
-
-% proved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal receivers_done
-receivers_done: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      receivers_done[r] => (mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
-   );
-
-% proved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal counter
-counter: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      counters[r] <= ixs[r]);
-
-% proved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l lemma_conj om1_fault.sal faulty_msg
-faulty_msg: LEMMA system_obs |-
-  G(   f.faulty?[source_id]
-    OR FORALL (i,j: IDENTITY):
-         (linked?(i,j) AND cal.msg[chan(i,j)] = faulty) => f.faulty?[i]);
-
-% proved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l faulty_msg om1_fault.sal faulty_relay
-faulty_relay: LEMMA system_obs |-
-  G(   f.faulty?[source_id]
-    OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
-         buffer[r][y] = faulty => f.faulty?[y]);
-
-% unproved
-buffer_write_once: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      FORALL (i: RELAYS):
-           NOT linked?(i, r)
-        OR (linked?(i, r) AND buffer[r][i] /= missing AND null?(cal, chan(i, r)))
-        OR (linked?(i, r) AND buffer[r][i] = missing)
-   );
-
-% unproved
-candidate_in_buffer: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      EXISTS (y: RELAYS): buffer[r][y] = candidate[r]);
-
-% unproved
-vaa: THEOREM system_obs |- G(mfa(f) => vaa_ok);
 
 %=== Invariants ===
 
@@ -503,25 +486,86 @@ lemma_conj: LEMMA system_obs |-
    );
 
 % proved: inductive!
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal gen_cal_fault
+gen_cal_fault: LEMMA system_obs |-
+  G(FORALL (i: RELAYS):
+      is_faulty_msg?(cal.msg[chan(source_id, i)]) => f[source_id]);
+
+% proved: inductive!
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l relay_cal_fault om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(FORALL (i:RECEIVERS):
       FORALL (j:RELAYS):
-        buffer[i][j] = faulty =>
-        f.faulty?[j] OR f.faulty?[source_id]);
+        is_faulty_msg?(buffer[i][j]) OR is_faulty_msg?(cal.msg[chan(i,j)])
+          => f[j] OR f[source_id]);
 
-% proved: inductive!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal gen_cal_fault
-gen_cal_fault: LEMMA system_obs |-
-  G(FORALL (i: RELAYS):
-      cal.msg[chan(source_id, i)] = faulty => f.faulty?[source_id]);
+%===  Main Theorems  ===
 
-% proved: inductive!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l gen_cal_fault om1_fault.sal relay_cal_fault
-relay_cal_fault: LEMMA system_obs |-
-  G(FORALL (i: RECEIVERS):
-      FORALL (j: RELAYS):
-        cal.msg[chan(j,i)] = faulty => f.faulty?[j] OR f.faulty?[source_id]);
+% unproved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal receivers_done
+receivers_done: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      receivers_done[r] =>
+        mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r]
+   );
+
+% unproved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal counter
+counter: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      counters[r] <= ixs[r]);
+
+% unproved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l lemma_conj om1_fault.sal faulty_msg
+%
+% COMMENTED: this is implied by 'fault_propagation'
+%
+% faulty_msg: LEMMA system_obs |-
+%   G(   f.faulty?[source_id]
+%     OR FORALL (i,j: IDENTITY):
+%          (linked?(i,j) AND cal.msg[chan(i,j)] = faulty) => f.faulty?[i]);
+
+% proved
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l faulty_msg om1_fault.sal faulty_relay
+%
+% COMMENTED: this is implied by 'fault_propagation'
+%
+% faulty_relay: LEMMA system_obs |-
+%   G(   f.faulty?[source_id]
+%     OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
+%          buffer[r][y] = faulty => f.faulty?[y]);
+
+% unproved
+% buffer_write_once: LEMMA system_obs |-
+%   G(FORALL (r: RECEIVERS):
+%       FORALL (i: RELAYS):
+%            NOT linked?(i, r)
+%         OR (linked?(i, r) AND buffer[r][i] /= missing AND null?(cal, chan(i, r)))
+%         OR (linked?(i, r) AND buffer[r][i] = missing)
+%    );
+
+% unproved
+candidate_in_buffer: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      EXISTS (y: RELAYS): buffer[r][y] = candidate[r]);
+
+% Maximum fault assumption for 'vaa' theorem
+mfa(f: FAULTS): BOOLEAN =
+  FORALL (i,j: IDENTITY):
+    f[i] AND f[j] => i = j;
+
+% unproved
+vaa: THEOREM system_obs |- G(mfa(f) => vaa_ok);
+
+
+% system eventually finishes (at which point vaa can be checked).
+% Alternatively, the safety property 'not_all_done' listed below can be
+% checked for counterexamples with bmc.
+%
+% unproved
+finish: THEOREM system_obs |- F(NOT not_done);
+
+
 
 %===--------------------------------------------------------------===
 %       Tests
