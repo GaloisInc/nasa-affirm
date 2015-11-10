@@ -12,9 +12,9 @@
 %   * main properties are specified using synchronous observer 'observer'
 %   * no faults are modeled
 %
-%   * the system of commit ___ has:
-%         number of system variables: 171,
-%         number of auxiliary variables: 14
+%   * the system of commit 7338ea0 has:
+%         number of system variables:    80
+%         number of auxiliary variables:  7
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 %         Lee Pike                            , Galois Inc. (2015)
@@ -476,8 +476,8 @@ missing_cal(cal: CALENDAR): BOOLEAN =
 unique_atomic(cal: CALENDAR): BOOLEAN =
   FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
 
-% proved:
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 3 om1_fault.sal lemma_conj
+% proved: inductive!
+% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
     AND global_time_not_null(t)
@@ -487,43 +487,35 @@ lemma_conj: LEMMA system_obs |-
 
 % proved: inductive!
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal gen_cal_fault
-gen_cal_fault: LEMMA system_obs |-
-  G(FORALL (i: RELAYS):
-      is_faulty_msg?(cal.msg[chan(source_id, i)]) => f[source_id]);
+%
+% COMMENTED: this lemma is trivial b/c even if source is faulty, the correct
+% msg is put in calendar, only when it's read does it show as faulty
+%
+% gen_cal_fault: LEMMA system_obs |-
+%   G(FORALL (i: RELAYS):
+%       is_faulty_msg?(cal.msg[chan(source_id, i)]) => f[source_id]);
 
 % proved: inductive!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj -l relay_cal_fault om1_fault.sal fault_propagation
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
-  G(FORALL (i:RECEIVERS):
-      FORALL (j:RELAYS):
-        is_faulty_msg?(buffer[i][j]) OR is_faulty_msg?(cal.msg[chan(i,j)])
-          => f[j] OR f[source_id]);
+  G(    (FORALL (j:RELAYS):                    % no faulty messages are stored here
+          NOT is_faulty_msg?(cal.msg[chan(source_id, j)]))
+    AND (FORALL (i:RECEIVERS):
+          FORALL (j:RELAYS):
+                (is_faulty_msg?(buffer[i][j])  % faulty msg read into buffer comes
+                  => f[j] OR f[source_id])     % from either faulty relay or faulty source
+            AND (is_faulty_msg?(cal.msg[chan(j, i)])
+                  => f[source_id])));          % faulty msg in cal must come from
+                                               % faulty source
 
-%===  Main Theorems  ===
-
-% unproved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal receivers_done
-receivers_done: LEMMA system_obs |-
+% proved: inductive!
+% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal receivers_lemma
+receivers_lemma: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      receivers_done[r] =>
-        mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r]
+        (receivers_done[r] =>
+           mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
+    AND (counters[r] <= ixs[r])
    );
-
-% unproved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal counter
-counter: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      counters[r] <= ixs[r]);
-
-% unproved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l lemma_conj om1_fault.sal faulty_msg
-%
-% COMMENTED: this is implied by 'fault_propagation'
-%
-% faulty_msg: LEMMA system_obs |-
-%   G(   f.faulty?[source_id]
-%     OR FORALL (i,j: IDENTITY):
-%          (linked?(i,j) AND cal.msg[chan(i,j)] = faulty) => f.faulty?[i]);
 
 % proved
 % sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l faulty_msg om1_fault.sal faulty_relay
@@ -545,9 +537,13 @@ counter: LEMMA system_obs |-
 %    );
 
 % unproved
+% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal candidate_in_buffer
 candidate_in_buffer: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      EXISTS (y: RELAYS): buffer[r][y] = candidate[r]);
+      receivers_done[r] => (EXISTS (y: RELAYS): buffer[r][y] = candidate[r]));
+
+
+%===  Main Theorems  ===
 
 % Maximum fault assumption for 'vaa' theorem
 mfa(f: FAULTS): BOOLEAN =
@@ -577,15 +573,15 @@ finish: THEOREM system_obs |- F(NOT not_done);
 source_test:    THEOREM system |- G(NOT source_done);
 relays_test:    THEOREM system |- G(NOT FORALL (i:RELAYS): relays_done[i]);
 
-% counterexample at depth 6, 8.29 secs
+% counterexample at depth ?
 time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
                                         % only advance as far as the relay broadcast
-% counterexample at depth 30, 4.44 secs
+% counterexample at depth ?
 recv_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
 
 % everyone finishes eventually:
-%   true to depth 30, 14.6 secs
-%   counterexample at depth 36, 26.18 secs!
+%   true to depth ?
+%   counterexample at depth ?
 all_done_test: THEOREM system_obs |- G(not_done);
 
 END
