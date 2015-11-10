@@ -342,15 +342,14 @@ lemma_conj: LEMMA system_obs |-
    );
 
 % proved: inductive
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 smp3.sal afault
+% sal-inf-bmc -v 1 -i -ice -d 1 smp3.sal afault
 afault: LEMMA system_obs |-
-  G(is_faulty_msg?(cal.msg[chan(node_A, node_B)]) => f[node_A]);
+  G(NOT is_faulty_msg?(cal.msg[chan(node_A, node_B)]));
 
 % proved: inductive
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l afault smp3.sal abfault
+% sal-inf-bmc -v 1 -i -ice -d 1 -l afault smp3.sal abfault
 abfault: LEMMA system_obs |-
-  G(is_faulty_msg?(cal.msg[chan(node_B, node_C)]) =>
-      f[node_A] OR f[node_B]);
+  G(is_faulty_msg?(cal.msg[chan(node_B, node_C)]) => f[node_A]);
 
 % XXX not general!
 % proved: 3-inductive
