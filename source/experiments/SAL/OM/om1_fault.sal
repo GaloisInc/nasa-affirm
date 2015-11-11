@@ -529,21 +529,32 @@ receivers_lemma: LEMMA system_obs |-
 %     OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
 %          buffer[r][y] = faulty => f.faulty?[y]);
 
-% unproved
-% buffer_write_once: LEMMA system_obs |-
-%   G(FORALL (r: RECEIVERS):
-%       FORALL (i: RELAYS):
-%            NOT linked?(i, r)
-%         OR (linked?(i, r) AND buffer[r][i] /= missing AND null?(cal, chan(i, r)))
-%         OR (linked?(i, r) AND buffer[r][i] = missing)
-%    );
+% How many good messages in the buffer? Call with relay ID 0?
+good_in_buffer(r: RELAYS, buffer: ARRAY RELAYS of MESSAGE): INTEGER =
+  IF r = num_relays
+    THEN 0
+    ELSIF buffer[r] = good_msg
+      THEN 1 + good_in_buffer(r+1, buffer)
+      ELSE good_in_buffer(r+1, buffer)
+  ENDIF;
 
-% unproved
-% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal candidate_in_buffer
-candidate_in_buffer: LEMMA system_obs |-
+% With 3 relays, there's only one fault, so once the counter is grater than
+% 1, we have a good candidate.
+candidate_voting: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      receivers_done[r] => (EXISTS (y: RELAYS): buffer[r][y] = candidate[r]));
+      FORALL (i: RELAYS):
+        modes[r] = voting AND counters[r] > 1 => candidate[r] = good_msg);
 
+% With 3 relays, 2 is the majority.
+counter_majority: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      receivers_done[r] => counters[r] >= 2);
+
+% Proved with unproved lemmas:
+% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l candidate_voting om1_fault.sal candidate_good
+candidate_good: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      receivers_done[r] => candidate[r] = good_msg);
 
 %===  Main Theorems  ===
 
@@ -553,6 +564,8 @@ mfa(f: FAULTS): BOOLEAN =
     f[i] AND f[j] => i = j;
 
 % unproved
+% Proved with unproved lemma (candidate_good):
+% sal-inf-bmc -v 1 -i -ice -d 1 -l receivers_lemma -l candidate_good om1_fault.sal vaa
 vaa: THEOREM system_obs |- G(mfa(f) => vaa_ok);
 
 
