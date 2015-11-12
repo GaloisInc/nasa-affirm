@@ -399,12 +399,10 @@ system: MODULE =
          WITH OUTPUT counters:       ARRAY RECEIVERS OF [1..3]
          WITH OUTPUT ixs:            ARRAY RECEIVERS OF [1..4]
          WITH OUTPUT votes:          ARRAY RECEIVERS of MESSAGE
-         WITH OUTPUT modes:          ARRAY RECEIVERS of RECEIVER_MODES
            ([] (x:RECEIVERS):  RENAME vote TO votes[x]
                                IN RENAME receiver_done TO receivers_done[x]
                                IN RENAME counter TO counters[x]
                                IN RENAME ix TO ixs[x]
-                               IN RENAME mode TO modes[x]
                                IN receiver[x]));
 
 
@@ -515,7 +513,7 @@ fault_propagation: LEMMA system_obs |-
 receivers_lemma: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
         (receivers_done[r] =>
-           modes[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
+           mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
     AND (counters[r] <= ixs[r])
    );
 
