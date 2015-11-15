@@ -399,12 +399,10 @@ system: MODULE =
          WITH OUTPUT counters:       ARRAY RECEIVERS OF [1..3]
          WITH OUTPUT ixs:            ARRAY RECEIVERS OF [1..4]
          WITH OUTPUT votes:          ARRAY RECEIVERS of MESSAGE
-         WITH OUTPUT modes:          ARRAY RECEIVERS of RECEIVER_MODES
            ([] (x:RECEIVERS):  RENAME vote TO votes[x]
                                IN RENAME receiver_done TO receivers_done[x]
                                IN RENAME counter TO counters[x]
                                IN RENAME ix TO ixs[x]
-                               IN RENAME mode TO modes[x]
                                IN receiver[x]));
 
 
@@ -464,6 +462,21 @@ system_obs : MODULE = system || observer;
 %       Verification
 %===--------------------------------------------------------------===
 
+%=== Helpers ===
+
+% Maximum fault assumption for 'vaa' theorem
+mfa(f: FAULTS): BOOLEAN =
+  FORALL (i,j: IDENTITY):
+    f[i] AND f[j] => i = j;
+
+% How many of a certain message are in the buffer?
+count_in_buffer(ix: RELAYS, max: RELAYS, buffer: ARRAY RELAYS of MESSAGE, m: MESSAGE): NATURAL =
+  IF ix > num_relays OR ix > max
+    THEN 0
+    ELSIF buffer[ix] = m
+      THEN count_in_buffer(ix+1, max, buffer, m) + 1
+      ELSE count_in_buffer(ix+1, max, buffer, m)
+  ENDIF;
 
 %=== Invariants ===
 
@@ -510,58 +523,83 @@ fault_propagation: LEMMA system_obs |-
                   => f[source_id])));          % faulty msg in cal must come from
                                                % faulty source
 
+% proved
+% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
+missing_buffer_size: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      FORALL (i: RELAYS):
+        buffer_size[r] + count_in_buffer(relay1_id, relay3_id, buffer[r], missing) = 3);
+
+% proved
+% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size om1_fault.sal no_missing_voting
+no_missing_voting: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      FORALL (i: RELAYS):
+         mode[r] = voting OR mode[r] = waiting => buffer[r][i] /= missing);
+
+% Unproved
+one_faulty_while_receiving: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      FORALL (i,j: RELAYS):
+							(mode[r] = receiving OR mode[r] = waiting OR mode[r] = voting)
+					AND is_faulty_msg?(buffer[r][i])
+					AND is_faulty_msg?(buffer[r][j])
+					AND mfa(f)
+        => i = j);
+
+% Unproved
+counter_candidate_ix: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+        mode[r] = voting AND mfa(f)
+      =>
+					(    candidate[r] = missing
+					 AND counters[r] = 0
+					 AND ixs[r] = 1)
+        OR
+					(    ixs[r] > 1
+           AND counters[r] <= count_in_buffer(relay1_id, ixs[r], buffer[r], candidate[r])
+					 AND EXISTS (i: RELAYS):
+										 buffer[r][i] = candidate[r]
+								 AND i <= ixs[r]
+					));
+
+% Unproved With 3 relays, 2 is the majority.
+counter_majority: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      (mfa(f) AND receivers_done[r]) => counters[r] > 1);
+
+% Proved with unproved lemmas:
+% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size -l one_faulty_while_receiving om1_fault.sal good_in_buffer_lemma
+good_in_buffer_lemma: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+         (    (mode[r] = waiting OR mode[r] = voting)
+          AND mfa(f))
+      => count_in_buffer(relay1_id, relay3_id, buffer[r], good_msg) >= 2);
+
+% With 3 relays, there's only one fault, so once the counter is grater than
+% Proved with unproved lemmas
+% sal-inf-bmc -v 1 -i -ice -d 1 -l good_in_buffer_lemma -l counter_candidate_ix om1_fault.sal candidate_voting
+candidate_voting: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      FORALL (i: RELAYS):
+        mode[r] = voting AND counters[r] > 1 AND mfa(f) => candidate[r] = good_msg);
+
 % proved: inductive!
 % sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal receivers_lemma
 receivers_lemma: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
         (receivers_done[r] =>
-           modes[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
+           mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
     AND (counters[r] <= ixs[r])
    );
-
-% proved
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 -l faulty_msg om1_fault.sal faulty_relay
-%
-% COMMENTED: this is implied by 'fault_propagation'
-%
-% faulty_relay: LEMMA system_obs |-
-%   G(   f.faulty?[source_id]
-%     OR FORALL (r: RECEIVERS): FORALL (y: RELAYS):
-%          buffer[r][y] = faulty => f.faulty?[y]);
-
-% How many good messages in the buffer? Call with relay ID 0?
-good_in_buffer(r: RELAYS, buffer: ARRAY RELAYS of MESSAGE): INTEGER =
-  IF r = num_relays
-    THEN 0
-    ELSIF buffer[r] = good_msg
-      THEN 1 + good_in_buffer(r+1, buffer)
-      ELSE good_in_buffer(r+1, buffer)
-  ENDIF;
-
-% With 3 relays, there's only one fault, so once the counter is grater than
-% 1, we have a good candidate.
-candidate_voting: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      FORALL (i: RELAYS):
-        modes[r] = voting AND counters[r] > 1 => candidate[r] = good_msg);
-
-% With 3 relays, 2 is the majority.
-counter_majority: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      receivers_done[r] => counters[r] >= 2);
 
 % Proved with unproved lemmas:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l candidate_voting om1_fault.sal candidate_good
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      receivers_done[r] => candidate[r] = good_msg);
+      receivers_done[r] AND mfa(f) => candidate[r] = good_msg);
 
 %===  Main Theorems  ===
-
-% Maximum fault assumption for 'vaa' theorem
-mfa(f: FAULTS): BOOLEAN =
-  FORALL (i,j: IDENTITY):
-    f[i] AND f[j] => i = j;
 
 % unproved
 % Proved with unproved lemma (candidate_good):
@@ -575,7 +613,6 @@ vaa: THEOREM system_obs |- G(mfa(f) => vaa_ok);
 %
 % unproved
 finish: THEOREM system_obs |- F(NOT not_done);
-
 
 
 %===--------------------------------------------------------------===
