@@ -4,7 +4,19 @@
 % version 1
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
-
+%
+% The following is a *very simple* model of two-node communication using
+% calendar automata, a fault model, and verification using a synchronous
+% observer. The system is:
+%
+%     A  -->  B
+%
+% where A send a single message to B and B, upon receipt, stores the message
+% in a 'latch'.
+%
+% The main theorem proved is that if A is not faulty, then B does receive the
+% message and the value sent by A is the same value stored in the latch.
+%
 
 smp: CONTEXT =
 BEGIN
