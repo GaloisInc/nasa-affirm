@@ -395,7 +395,7 @@ system: MODULE =
      [] (WITH OUTPUT relays_done: ARRAY RELAYS OF BOOLEAN
            ([] (x:RELAYS): RENAME relay_done TO relays_done[x] IN relay[x]))
      [] (WITH OUTPUT receivers_done: ARRAY RECEIVERS OF BOOLEAN
-         WITH OUTPUT counters:       ARRAY RECEIVERS OF [1..3]
+         WITH OUTPUT counters:       ARRAY RECEIVERS OF [0..3]
          WITH OUTPUT ixs:            ARRAY RECEIVERS OF [1..4]
          WITH OUTPUT votes:          ARRAY RECEIVERS of MESSAGE
            ([] (x:RECEIVERS):  RENAME vote TO votes[x]
