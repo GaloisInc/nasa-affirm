@@ -293,7 +293,6 @@ BEGIN
         ix: [1..4]
     LOCAL
         mode: RECEIVER_MODES,
-        critical: BOOLEAN,
         buffer: ARRAY RELAYS of MESSAGE,
         buffer_size: [0..num_relays],
         candidate: MESSAGE,
