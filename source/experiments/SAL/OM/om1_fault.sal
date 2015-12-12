@@ -372,7 +372,7 @@ TRANSITION
                        ELSE counter-1
                      ENDIF;
         ix' = ix + 1;
-        pc' = pc + 1
+        pc' = pc + 1;
     []
         receiver_exit:
         mode = voting AND pc > 0 AND ix = 4 AND i_am_atomic?(cal, p, t) -->
@@ -494,7 +494,7 @@ missing_cal(cal: CALENDAR): BOOLEAN =
 unique_atomic(cal: CALENDAR): BOOLEAN =
   FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
 
-% proved: inductive!
+% Proved:
 % sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
@@ -513,7 +513,7 @@ lemma_conj: LEMMA system_obs |-
 %   G(FORALL (i: RELAYS):
 %       is_faulty_msg?(cal.msg[chan(source_id, i)]) => f[source_id]);
 
-% proved: inductive!
+% Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(    (FORALL (j:RELAYS):                    % no faulty messages are stored here
@@ -526,34 +526,22 @@ fault_propagation: LEMMA system_obs |-
                   => f[source_id])));          % faulty msg in cal must come from
                                                % faulty source
 
-% proved
+% Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
 missing_buffer_size: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i: RELAYS):
         buffer_size[r] + count_in_buffer(relay1_id, relay3_id, buffer[r], missing) = 3);
 
-% proved
+% Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size om1_fault.sal no_missing_voting
 no_missing_voting: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i: RELAYS):
-         mode[r] = voting OR mode[r] = waiting => buffer[r][i] /= missing);
+        mode[r] = voting OR mode[r] = waiting OR mode[r] = done => buffer[r][i] /= missing);
 
-% proved
-% Main invarinant of what happens during the voting mode.
-% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal counter_candidate_ix
-counter_candidate_ix: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-             (mode[r] = voting OR mode[r] = done)
-         AND ixs[r] > 1
-				 AND counters[r] <= count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r])
-				 AND EXISTS (i: RELAYS):
-                   buffer[r][i] = candidate[r]
-							 AND i < ixs[r]
-							);
-
-% Unproved
+% Proved:
+% sal-inf-bmc -v 1 -i -ice -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
 one_faulty_in_buffers: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i,j: RELAYS):
@@ -562,28 +550,43 @@ one_faulty_in_buffers: LEMMA system_obs |-
 					AND validity(f)
         => i = j);
 
-% Unproved With 3 relays, 2 is the majority.
+% Main invarinant of what happens during the voting mode.
+% Proved:
+% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal counter_candidate_ix
+counter_candidate_ix: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+        (mode[r] = receiving AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0)
+     OR ((mode[r] = waiting OR mode[r] = voting) AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0)
+     OR (mode[r] = voting    AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 1)
+     OR (mode[r] = voting    AND counters[r] <= count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r])
+                             AND ixs[r] >= 1 AND ixs[r] <= 4 AND pc[r] >= 1
+                             AND EXISTS (i: RELAYS): buffer[r][i] = candidate[r] AND i < ixs[r]
+        )
+     OR (mode[r] = done      AND pc[r] >= 1 AND ixs[r] = 4 AND votes[r] = candidate[r])
+   );
+
+% Proved:
+% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_candidate_ix -l one_faulty_in_buffers -l no_missing_voting om1_fault.sal counter_majority
 counter_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      (validity(f) AND mode[r] = done) => counters[r] > 1);
+         validity(f)
+      =>    (ixs[r] = 2 AND counters[r] = 0)
+         OR (ixs[r] = 3 AND (  (    counters[r] = 1 AND candidate[r] = good_msg
+                                AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r]) = 2)
+                            OR counters[r] = 0 AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r]) <= 1))
+         OR (ixs[r] = 4 AND candidate[r] = good_msg)
+         OR (ixs[r] = 1 AND candidate[r] = missing)
+   );
 
-% Proved with unproved lemmas:
+% Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size -l one_faulty_in_buffers om1_fault.sal good_in_buffer_lemma
 good_in_buffer_lemma: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-         (    (mode[r] = waiting OR mode[r] = voting)
+         (    (mode[r] = waiting OR mode[r] = voting OR mode[r] = done)
           AND validity(f))
       => count_in_buffer(relay1_id, relay3_id, buffer[r], good_msg) >= 2);
 
-% With 3 relays, there's only one fault, so once the counter is grater than
-% Proved with unproved lemmas
-% sal-inf-bmc -v 1 -i -ice -d 1 -l good_in_buffer_lemma -l counter_candidate_ix om1_fault.sal candidate_voting
-candidate_voting: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      FORALL (i: RELAYS):
-        mode[r] = voting AND counters[r] > 1 AND validity(f) => candidate[r] = good_msg);
-
-% proved: inductive!
+% Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal receivers_lemma
 receivers_lemma: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -593,16 +596,16 @@ receivers_lemma: LEMMA system_obs |-
    );
 
 % Proved with unproved lemmas:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l candidate_voting om1_fault.sal candidate_good
+% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers -l no_missing_voting om1_fault.sal candidate_good
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      mode[r] = done AND mfa(f) => candidate[r] = good_msg);
+      mode[r] = done AND validity(f) => candidate[r] = good_msg);
 
 %===  Main Theorems  ===
 
 % Proved with unproved lemma (candidate_good):
 % sal-inf-bmc -v 1 -i -ice -d 1 -l receivers_lemma -l candidate_good om1_fault.sal vaa
-vaa: THEOREM system_obs |- G(mfa(f) => vaa_ok);
+vaa: THEOREM system_obs |- G(validity(f) => vaa_ok);
 
 
 % system eventually finishes (at which point vaa can be checked).
