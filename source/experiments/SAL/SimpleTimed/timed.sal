@@ -1,0 +1,54 @@
+% timed.sal
+%
+% Simple timing constraints
+% version 1
+%
+% Author: Lee Pike, Galois Inc. (2015)
+
+
+timed: CONTEXT =
+BEGIN
+
+Time : TYPE = { t : REAL | t >= 0 };
+
+t : Time = 0;
+
+node_A : MODULE =
+BEGIN
+  GLOBAL
+    t : Time
+  TRANSITION
+  [
+    TRUE --> t' IN { x : Time | x > t };
+  ]
+END;
+
+node_B : MODULE =
+BEGIN
+  GLOBAL
+    t : Time
+TRANSITION
+  [
+    TRUE --> t' IN { x : Time | x > t };
+  ]
+END;
+
+nodes : MODULE = node_A [] node_B;
+
+time_constraints : MODULE =
+BEGIN
+  OUTPUT
+    old_t : Time
+  INITIALIZATION
+    old_t = t;
+  TRANSITION
+  [
+    TRUE --> old_t' = t;
+  ]
+END;
+
+system : MODULE = (node_A [] node_B) || time_constraints;
+
+% A property that constraints the progress of time s that a node cannot
+% increase time by more than 3 units.
+prop(old_t : Time, t : Time) : BOOLEAN = old_t + 3 >= t;
