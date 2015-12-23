@@ -10,11 +10,11 @@
 %   * attempted to minimize number of state vars
 %   * all nodes in 'system' are composed asynchronously
 %   * main properties are specified using synchronous observer 'observer'
-%   * no faults are modeled
+%   * byzantine faults are modeled through the message-read mechanism
 %
-%   * the system of commit 7338ea0 has:
-%         number of system variables:    80
-%         number of auxiliary variables:  7
+%   * the system of commit b4b4708 has:
+%         number of system variables:    78
+%         number of auxiliary variables:  8
 %
 % Author: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 %         Lee Pike                            , Galois Inc. (2015)
@@ -464,12 +464,13 @@ system_obs : MODULE = system || observer;
 
 %=== Helpers ===
 
-% Maximum fault assumption.
+% Maximum fault assumption: there is at most 1 faulty node
 mfa(f: FAULTS): BOOLEAN =
   FORALL (i,j: IDENTITY):
     f[i] AND f[j] => i = j;
 
-% Validity constraint
+% Validity constraint: there is at most 1 faulty node and it is not the source
+% node
 validity(f: FAULTS): BOOLEAN =
   mfa(f) AND NOT f[source_id];
 
@@ -508,14 +509,15 @@ lemma_conj: LEMMA system_obs |-
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(    (FORALL (j:RELAYS):                    % no faulty messages are stored here
-          NOT is_faulty_msg?(cal.msg[chan(source_id, j)]))
+           NOT is_faulty_msg?(cal.msg[chan(source_id, j)]))
     AND (FORALL (i:RECEIVERS):
-          FORALL (j:RELAYS):
-                (is_faulty_msg?(buffer[i][j])  % faulty msg read into buffer comes
-                  => f[j] OR f[source_id])     % from either faulty relay or faulty source
-            AND (is_faulty_msg?(cal.msg[chan(j, i)])
-                  => f[source_id])));          % faulty msg in cal must come from
-                                               % faulty source
+           FORALL (j:RELAYS):
+                 (is_faulty_msg?(buffer[i][j])  % faulty msg read into buffer comes
+                   => f[j] OR f[source_id])     % from either faulty relay or faulty
+                                                % source
+             AND (is_faulty_msg?(cal.msg[chan(j, i)])
+                   => f[source_id])));          % faulty msg in cal must come from
+                                                % faulty source
 
 % Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
@@ -529,47 +531,81 @@ missing_buffer_size: LEMMA system_obs |-
 one_faulty_in_buffers: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i,j: RELAYS):
-					    is_faulty_msg?(buffer[r][i])
-					AND is_faulty_msg?(buffer[r][j])
-					AND validity(f)
+            is_faulty_msg?(buffer[r][i])
+        AND is_faulty_msg?(buffer[r][j])
+        AND validity(f)
         => i = j);
 
 % Main invarinant of what happens during the voting mode.
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal counter_candidate_ix
+% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size om1_fault.sal counter_candidate_ix
 counter_candidate_ix: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-    (    (NOT receivers_done[r])
-     AND
-	       (   (mode[r] = receiving AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0)
-					OR ((mode[r] = waiting OR mode[r] = voting) AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0
-                 AND FORALL (i: RELAYS): buffer[r][i] /= missing)
-					OR (mode[r] = voting    AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 1
-                                  AND FORALL (i: RELAYS): buffer[r][i] /= missing)
-					OR (mode[r] = voting    AND counters[r] <= count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r])
-																	AND ixs[r] >= 1 AND ixs[r] <= 4 AND pc[r] >= 1
-																	AND EXISTS (i: RELAYS): buffer[r][i] = candidate[r] AND i < ixs[r]
-                                  AND FORALL (i: RELAYS): buffer[r][i] /= missing
-        )))
-     OR (mode[r] = done      AND pc[r] >= 1 AND ixs[r] = 4 AND votes[r] = candidate[r] AND receivers_done[r]
-                             AND FORALL (i: RELAYS): buffer[r][i] /= missing)
+    (    NOT receivers_done[r]
+     AND (   (    mode[r] = receiving
+              AND counters[r] = 0
+              AND ixs[r] = 1
+              AND pc[r] = 0
+             )
+          OR (    (mode[r] = waiting OR mode[r] = voting)
+              AND counters[r] = 0
+              AND ixs[r] = 1
+              AND pc[r] = 0
+              AND FORALL (i: RELAYS): buffer[r][i] /= missing
+             )
+          OR (    mode[r] = voting
+              AND counters[r] = 0
+              AND ixs[r] = 1
+              AND pc[r] = 1
+              AND FORALL (i: RELAYS): buffer[r][i] /= missing
+             )
+          OR (    mode[r] = voting
+              AND counters[r] <= count_in_buffer(relay1_id, ixs[r]-1,
+                                                 buffer[r], candidate[r])
+              AND ixs[r] >= 1
+              AND ixs[r] <= 4
+              AND pc[r] >= 1
+              AND EXISTS (i: RELAYS): (buffer[r][i] = candidate[r] AND i < ixs[r])
+              AND FORALL (i: RELAYS): buffer[r][i] /= missing
+             )
+         )
+    )
+    OR (    receivers_done[r]
+        AND mode[r] = done
+        AND ixs[r] = 4
+        AND pc[r] >= 1
+        AND votes[r] = candidate[r]
+        AND FORALL (i: RELAYS): buffer[r][i] /= missing
+       )
    );
 
 % Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
 counter_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-         validity(f)
-      =>    (ixs[r] = 1 AND candidate[r] = missing)
-         OR (ixs[r] = 2 AND counters[r] = 0)
-         OR (ixs[r] = 3 AND (  (    counters[r] = 1 AND candidate[r] = good_msg
-                                AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r]) = 2)
-                            OR counters[r] = 0 AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r]) <= 1))
-         OR (ixs[r] = 4 AND candidate[r] = good_msg)
-
+      validity(f)
+      => (
+             (ixs[r] = 1 AND candidate[r] = missing)
+          OR (ixs[r] = 2 AND counters[r] = 0)
+          OR (    ixs[r] = 3
+              AND (
+                   (    counters[r] = 1
+                    AND candidate[r] = good_msg
+                    AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r],
+                                        candidate[r]) = 2
+                   )
+                   OR (
+                           counters[r] = 0
+                       AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r],
+                                           candidate[r]) <= 1
+                      )
+                  )
+             )
+          OR (ixs[r] = 4 AND candidate[r] = good_msg)
+         )
    );
 
-% Proved with unproved lemmas:
+% Proved!
 % sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -577,9 +613,10 @@ candidate_good: LEMMA system_obs |-
 
 %===  Main Theorems  ===
 
-% Proved with unproved lemma (candidate_good):
+% Proved!
 % sal-inf-bmc -v 1 -i -ice -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
 validity: THEOREM system_obs |- G(validity(f) => v_ok);
+
 
 % ------------------------------------------------------------
 % Agreement lemmas
@@ -598,16 +635,19 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 %            OR  buffer[r1][j] = missing
 %     );
 
+
 % relay_tx_consistent: LEMMA system_obs |-
 %   G(FORALL (r0,r1: RECEIVERS):
 %       FORALL (i: RELAYS):
-%         NOT f[i] => msg_send(cal, i r0, 
+%         NOT f[i] => msg_send(cal, i r0,
 
-% Proved:
-% sal-inf-bmc -i -ice -d 1 -l counter_candidate_ix -l candidate_good om1_fault.sal agreement
+
+% Proved assuming 'validity(f)' instead of 'mfa(f)'
+% UNCOMMENT LINE BELOW FIRST: sal-inf-bmc -i -ice -d 1 -l counter_candidate_ix -l candidate_good om1_fault.sal agreement
 % agreement: THEOREM system_obs |- G(validity(f) => a_ok);
 
 
+% Work in progress
 agreement: THEOREM system_obs |- G(mfa(f) => a_ok);
 
 
