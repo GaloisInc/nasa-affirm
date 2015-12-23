@@ -120,9 +120,9 @@ while [ $# \> "1" ]; do
 done
 
 function cmd {
-    egrep -e "^%[ ]*sal-" $SALFILE | sed "s/^%[ ]*//" | \
+    time egrep -e "^%[ ]*sal-" $SALFILE | sed "s/^%[ ]*//" | \
       awk '{print "echo proving" ":" " " $0 "\n" $0}' | \
-      time bash
+      bash
 }
 
 # Write out to standard out and err to standard error.
