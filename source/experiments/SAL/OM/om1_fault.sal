@@ -503,16 +503,6 @@ lemma_conj: LEMMA system_obs |-
     AND unique_atomic(cal)
    );
 
-% proved: inductive!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal gen_cal_fault
-%
-% COMMENTED: this lemma is trivial b/c even if source is faulty, the correct
-% msg is put in calendar, only when it's read does it show as faulty
-%
-% gen_cal_fault: LEMMA system_obs |-
-%   G(FORALL (i: RELAYS):
-%       is_faulty_msg?(cal.msg[chan(source_id, i)]) => f[source_id]);
-
 % Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
@@ -534,13 +524,6 @@ missing_buffer_size: LEMMA system_obs |-
         buffer_size[r] + count_in_buffer(relay1_id, relay3_id, buffer[r], missing) = 3);
 
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size om1_fault.sal no_missing_voting
-no_missing_voting: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-      FORALL (i: RELAYS):
-        mode[r] = voting OR mode[r] = waiting OR mode[r] = done => buffer[r][i] /= missing);
-
-% Proved:
 % sal-inf-bmc -v 1 -i -ice -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
 one_faulty_in_buffers: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -555,56 +538,46 @@ one_faulty_in_buffers: LEMMA system_obs |-
 % sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal counter_candidate_ix
 counter_candidate_ix: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-        (mode[r] = receiving AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0)
-     OR ((mode[r] = waiting OR mode[r] = voting) AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0)
-     OR (mode[r] = voting    AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 1)
-     OR (mode[r] = voting    AND counters[r] <= count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r])
-                             AND ixs[r] >= 1 AND ixs[r] <= 4 AND pc[r] >= 1
-                             AND EXISTS (i: RELAYS): buffer[r][i] = candidate[r] AND i < ixs[r]
-        )
-     OR (mode[r] = done      AND pc[r] >= 1 AND ixs[r] = 4 AND votes[r] = candidate[r])
+    (    (NOT receivers_done[r])
+     AND
+	       (   (mode[r] = receiving AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0)
+					OR ((mode[r] = waiting OR mode[r] = voting) AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 0
+                 AND FORALL (i: RELAYS): buffer[r][i] /= missing)
+					OR (mode[r] = voting    AND counters[r] = 0 AND ixs[r] = 1 and pc[r] = 1
+                                  AND FORALL (i: RELAYS): buffer[r][i] /= missing)
+					OR (mode[r] = voting    AND counters[r] <= count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r])
+																	AND ixs[r] >= 1 AND ixs[r] <= 4 AND pc[r] >= 1
+																	AND EXISTS (i: RELAYS): buffer[r][i] = candidate[r] AND i < ixs[r]
+                                  AND FORALL (i: RELAYS): buffer[r][i] /= missing
+        )))
+     OR (mode[r] = done      AND pc[r] >= 1 AND ixs[r] = 4 AND votes[r] = candidate[r] AND receivers_done[r]
+                             AND FORALL (i: RELAYS): buffer[r][i] /= missing)
    );
 
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_candidate_ix -l one_faulty_in_buffers -l no_missing_voting om1_fault.sal counter_majority
+% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
 counter_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
          validity(f)
-      =>    (ixs[r] = 2 AND counters[r] = 0)
+      =>    (ixs[r] = 1 AND candidate[r] = missing)
+         OR (ixs[r] = 2 AND counters[r] = 0)
          OR (ixs[r] = 3 AND (  (    counters[r] = 1 AND candidate[r] = good_msg
                                 AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r]) = 2)
                             OR counters[r] = 0 AND count_in_buffer(relay1_id, ixs[r]-1, buffer[r], candidate[r]) <= 1))
          OR (ixs[r] = 4 AND candidate[r] = good_msg)
-         OR (ixs[r] = 1 AND candidate[r] = missing)
-   );
 
-% Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size -l one_faulty_in_buffers om1_fault.sal good_in_buffer_lemma
-good_in_buffer_lemma: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-         (    (mode[r] = waiting OR mode[r] = voting OR mode[r] = done)
-          AND validity(f))
-      => count_in_buffer(relay1_id, relay3_id, buffer[r], good_msg) >= 2);
-
-% Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 om1_fault.sal receivers_lemma
-receivers_lemma: LEMMA system_obs |-
-  G(FORALL (r: RECEIVERS):
-        (receivers_done[r] =>
-           mode[r] = done AND ixs[r] = 4 AND votes[r] = candidate[r])
-    AND (counters[r] <= ixs[r])
    );
 
 % Proved with unproved lemmas:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers -l no_missing_voting om1_fault.sal candidate_good
+% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
-      mode[r] = done AND validity(f) => candidate[r] = good_msg);
+      mode[r] = done AND validity(f) => votes[r] = good_msg);
 
 %===  Main Theorems  ===
 
 % Proved with unproved lemma (candidate_good):
-% sal-inf-bmc -v 1 -i -ice -d 1 -l receivers_lemma -l candidate_good om1_fault.sal vaa
+% sal-inf-bmc -v 1 -i -ice -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal vaa
 vaa: THEOREM system_obs |- G(validity(f) => vaa_ok);
 
 
