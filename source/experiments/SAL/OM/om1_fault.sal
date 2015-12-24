@@ -420,10 +420,12 @@ BEGIN
     votes: ARRAY RECEIVERS OF MESSAGE,
     f: FAULTS
   OUTPUT
-    vaa_ok: BOOLEAN,
+    v_ok: BOOLEAN,
+    a_ok: BOOLEAN,
     not_done: BOOLEAN
 INITIALIZATION
-  vaa_ok = TRUE;
+  v_ok = TRUE;
+  a_ok = TRUE;
   not_done = TRUE
 TRANSITION
   [
@@ -433,13 +435,12 @@ TRANSITION
          AND (NOT f[source_id])
       )
         -->
-        vaa_ok' = FALSE
-  % TODO - add agrement back in!
-  % []
-  %   no_agreement:
-  %     (FORALL (x:RECEIVERS): receivers_done[x]) AND
-  %     (NOT (FORALL (x,y:RECEIVERS): votes[x]=votes[y])) -->
-  %       vaa_ok' = FALSE
+        v_ok' = FALSE
+  []
+    no_agreement:
+      (    FORALL (x:RECEIVERS): receivers_done[x]
+       AND EXISTS (x,y:RECEIVERS): votes[x] /= votes[y]) -->
+        a_ok' = FALSE
   []
     % For the test THEOREMS below
     all_done:
@@ -463,7 +464,7 @@ system_obs : MODULE = system || observer;
 
 %=== Helpers ===
 
-% Maximum fault assumption for 'vaa' theorem
+% Maximum fault assumption.
 mfa(f: FAULTS): BOOLEAN =
   FORALL (i,j: IDENTITY):
     f[i] AND f[j] => i = j;
@@ -577,11 +578,45 @@ candidate_good: LEMMA system_obs |-
 %===  Main Theorems  ===
 
 % Proved with unproved lemma (candidate_good):
-% sal-inf-bmc -v 1 -i -ice -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal vaa
-vaa: THEOREM system_obs |- G(validity(f) => vaa_ok);
+% sal-inf-bmc -v 1 -i -ice -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
+validity: THEOREM system_obs |- G(validity(f) => v_ok);
+
+% ------------------------------------------------------------
+% Agreement lemmas
+% ------------------------------------------------------------
+
+% buffer_diff_max_one: LEMMA system_obs |-
+%   G(FORALL (r0,r1: RECEIVERS):
+%       FORALL (i,j : RELAYS):
+%                mfa(f)
+%            AND buffer[r0][i] /= buffer[r1][i]
+%            AND i /= j
+%            AND buffer[r0][i] /= missing
+%            AND buffer[r1][i] /= missing
+%         =>     buffer[r0][j] = buffer[r1][j]
+%            OR  buffer[r0][j] = missing
+%            OR  buffer[r1][j] = missing
+%     );
+
+% relay_tx_consistent: LEMMA system_obs |-
+%   G(FORALL (r0,r1: RECEIVERS):
+%       FORALL (i: RELAYS):
+%         NOT f[i] => msg_send(cal, i r0, 
+
+% Proved:
+% sal-inf-bmc -i -ice -d 1 -l counter_candidate_ix -l candidate_good om1_fault.sal agreement
+% agreement: THEOREM system_obs |- G(validity(f) => a_ok);
 
 
-% system eventually finishes (at which point vaa can be checked).
+agreement: THEOREM system_obs |- G(mfa(f) => a_ok);
+
+
+
+
+% ----------------------------------------
+
+
+% system eventually finishes (at which point validity can be checked).
 % Alternatively, the safety property 'not_all_done' listed below can be
 % checked for counterexamples with bmc.
 %
