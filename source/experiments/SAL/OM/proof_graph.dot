@@ -1,0 +1,29 @@
+digraph proof {
+    v [label="validity"];
+    cg [label="candidate_good"];
+    cm [label="counter_majority"];
+    cci [label="counter_candidate_ix"];
+    ofb [label="one_faulty_in_buffers"];
+    fp [label="fault_propagation"];
+    mbs [label="missing_buffer_size"];
+    lc [label="lemma_conj"];
+
+    v -> cg;
+    v -> cci;
+
+    cg -> cm;
+    cg -> cci;
+    cg -> ofb;
+
+    cm -> cci;
+    cm -> ofb;
+    cm -> mbs;
+
+    cci -> mbs;
+
+    ofb -> fp;
+
+    mbs -> lc;
+
+    fp -> lc;
+}
