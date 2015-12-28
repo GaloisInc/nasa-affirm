@@ -319,6 +319,10 @@ TRANSITION
       %----------------------------------------------------------------
 
    ([] (i:RELAYS):
+
+      % XXX LP: This transition rule might be strengthened so buffer[i] =
+      % missing is a guard. Then it simplifies the rules. However, we need
+      % to make sure that doing so doesn't cause deadlock.
       receiver_recv:
       mode = receiving AND node_event?(cal, i, p, t) -->
         buffer'[i] = IF buffer[i] = missing
@@ -622,6 +626,16 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 % Agreement lemmas
 % ------------------------------------------------------------
 
+% XXX LP: not sure if this is useful.
+% Proved
+% sal-inf-bmc -i -ice -d 1 om1_fault.sal relay_chans
+relay_chans: LEMMA system_obs |-
+  G(FORALL (r0,r1: RECEIVERS):
+      FORALL (i: RELAYS):
+					 cal.msg[chan(i,r0)] = missing
+        OR cal.msg[chan(i,r1)] = missing
+        OR cal.msg[chan(i,r1)] = cal.msg[chan(i,r0)]);
+
 % buffer_diff_max_one: LEMMA system_obs |-
 %   G(FORALL (r0,r1: RECEIVERS):
 %       FORALL (i,j : RELAYS):
@@ -635,13 +649,6 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 %            OR  buffer[r1][j] = missing
 %     );
 
-
-% relay_tx_consistent: LEMMA system_obs |-
-%   G(FORALL (r0,r1: RECEIVERS):
-%       FORALL (i: RELAYS):
-%         NOT f[i] => msg_send(cal, i r0,
-
-
 % Proved assuming 'validity(f)' instead of 'mfa(f)'
 % UNCOMMENT LINE BELOW FIRST: sal-inf-bmc -i -ice -d 1 -l counter_candidate_ix -l candidate_good om1_fault.sal agreement
 % agreement: THEOREM system_obs |- G(validity(f) => a_ok);
@@ -649,7 +656,6 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 
 % Work in progress
 agreement: THEOREM system_obs |- G(mfa(f) => a_ok);
-
 
 
 
