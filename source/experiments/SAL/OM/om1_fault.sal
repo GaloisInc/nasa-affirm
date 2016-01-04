@@ -501,7 +501,7 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
   FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
 
 % Proved:
-% sal-inf-bmc -v 1 --delta-path -i -ice -d 1 om1_fault.sal lemma_conj
+% sal-inf-bmc --delta-path -i -ice -d 1 om1_fault.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
     AND global_time_not_null(t)
@@ -510,7 +510,7 @@ lemma_conj: LEMMA system_obs |-
    );
 
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal fault_propagation
+% sal-inf-bmc -i -ice -d 1 -l lemma_conj om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(    (FORALL (j:RELAYS):                    % no faulty messages are stored here
            NOT is_faulty_msg?(cal.msg[chan(source_id, j)]))
@@ -524,14 +524,14 @@ fault_propagation: LEMMA system_obs |-
                                                 % faulty source
 
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
+% sal-inf-bmc -i -ice -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
 missing_buffer_size: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i: RELAYS):
         buffer_size[r] + count_in_buffer(relay1_id, relay3_id, buffer[r], missing) = 3);
 
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
+% sal-inf-bmc -i -ice -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
 one_faulty_in_buffers: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i,j: RELAYS):
@@ -542,7 +542,7 @@ one_faulty_in_buffers: LEMMA system_obs |-
 
 % Main invarinant of what happens during the voting mode.
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size om1_fault.sal counter_candidate_ix
+% sal-inf-bmc -i -ice -d 1 -l missing_buffer_size om1_fault.sal counter_candidate_ix
 counter_candidate_ix: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
     (    NOT receivers_done[r]
@@ -584,7 +584,7 @@ counter_candidate_ix: LEMMA system_obs |-
    );
 
 % Proved:
-% sal-inf-bmc -v 1 -i -ice -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
+% sal-inf-bmc -i -ice -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
 counter_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       validity(f)
@@ -610,7 +610,7 @@ counter_majority: LEMMA system_obs |-
    );
 
 % Proved!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
+% sal-inf-bmc -i -ice -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       mode[r] = done AND validity(f) => votes[r] = good_msg);
@@ -618,7 +618,7 @@ candidate_good: LEMMA system_obs |-
 %===  Main Theorems  ===
 
 % Proved!
-% sal-inf-bmc -v 1 -i -ice -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
+% sal-inf-bmc -i -ice -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
 validity: THEOREM system_obs |- G(validity(f) => v_ok);
 
 
