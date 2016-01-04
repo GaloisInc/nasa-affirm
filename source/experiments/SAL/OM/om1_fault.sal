@@ -645,6 +645,30 @@ relay_chans: LEMMA system_obs |-
         OR cal.msg[chan(i,r1)] = missing
         OR cal.msg[chan(i,r1)] = cal.msg[chan(i,r0)]);
 
+% Whenever two receivers have obtained values from relay 'i', they are equal
+% unless 'i' is faulty.
+% Unproven
+% XXX sal-inf-bmc -i -ice -d 1 om1_fault.sal relay_buffers
+relay_buffers: LEMMA system_obs |-
+  G(FORALL (r0,r1: RECEIVERS):
+      FORALL (i: RELAYS):
+        receivers_done[r0] AND receivers_done[r1] AND NOT f[i] =>
+          buffer[r0][i] = buffer[r1][i]);
+
+% Lemma relating values that appear on the calendar and in the buffers. This
+% requires adding a history variable tracking cal.msg. Here, the history
+% variable is called cal.hist.
+%
+% Proved 2-inductive
+% TODO: refine to an inductive lemma
+% XXX sal-inf-bmc -i -ice -d 2 om1_fault.sal relay_to_recv_step
+%
+% relay_to_recv_step: LEMMA system_obs |-
+%   G(FORALL (r: RECEIVERS, i: RELAYS):
+%       NOT f[i] =>
+%         (cal.msg[chan(i,r)] /= missing AND buffer[r][i] = missing =>
+%          X(buffer[r][i] = cal.hist[chan(i,r)] OR buffer[r][i] = missing)));
+
 % buffer_diff_max_one: LEMMA system_obs |-
 %   G(FORALL (r0,r1: RECEIVERS):
 %       FORALL (i,j : RELAYS):
