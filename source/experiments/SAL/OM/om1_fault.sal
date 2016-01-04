@@ -626,13 +626,22 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 % Agreement lemmas
 % ------------------------------------------------------------
 
+% foo sal-inf-bmc -i -ice -d 1 -l fault_propagation om1_fault.sal fault_origin
+fault_origin: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      FORALL (i,j: RELAYS):
+            is_faulty_msg?(buffer[r][i])
+        AND is_faulty_msg?(buffer[r][j])
+        AND mfa(f)
+        => f[source_id] OR i = j);
+
 % XXX LP: not sure if this is useful.
 % Proved
 % sal-inf-bmc -i -ice -d 1 om1_fault.sal relay_chans
 relay_chans: LEMMA system_obs |-
   G(FORALL (r0,r1: RECEIVERS):
       FORALL (i: RELAYS):
-					 cal.msg[chan(i,r0)] = missing
+           cal.msg[chan(i,r0)] = missing
         OR cal.msg[chan(i,r1)] = missing
         OR cal.msg[chan(i,r1)] = cal.msg[chan(i,r0)]);
 
