@@ -319,25 +319,25 @@ TRANSITION
       %----------------------------------------------------------------
 
    ([] (i:RELAYS):
-
-      % XXX LP: This transition rule might be strengthened so buffer[i] =
-      % missing is a guard. Then it simplifies the rules. However, we need
-      % to make sure that doing so doesn't cause deadlock.
       receiver_recv:
-      mode = receiving AND node_event?(cal, i, p, t) -->
-        buffer'[i] = IF buffer[i] = missing
-                       THEN msg(t, cal, f, i, p)
-                       ELSE buffer[i]             % drop message if buffer[i] is full
-                     ENDIF;
-        buffer_size' = IF buffer[i] = missing
-                         THEN buffer_size + 1
-                         ELSE buffer_size
+      mode = receiving AND node_event?(cal, i, p, t) AND buffer[i] = missing -->
+        buffer'[i]   = msg(t, cal, f, i, p);
+        buffer_size' = buffer_size + 1;
+        cal'         = msg_consume(cal, i, p);
+        mode'        = IF buffer_size' = num_relays     % change modes when buffer is full
+                         THEN waiting
+                         ELSE receiving
                        ENDIF;
-        cal'  = msg_consume(cal, i, p);
-        mode' = IF buffer_size' = num_relays     % change modes when buffer is full
-                  THEN waiting
-                  ELSE receiving
-                ENDIF;
+      )
+    []
+      %----------------------------------------------------------------
+      % drop incoming message if buffer[i] is full
+      %----------------------------------------------------------------
+
+   ([] (i:RELAYS):
+      receiver_recv:
+      mode = receiving AND node_event?(cal, i, p, t) AND buffer[i] /= missing -->
+        cal'         = msg_consume(cal, i, p);
       )
     []
       %----------------------------------------------------------------
