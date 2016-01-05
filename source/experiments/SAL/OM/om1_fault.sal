@@ -635,6 +635,10 @@ fault_origin: LEMMA system_obs |-
         AND mfa(f)
         => f[source_id] OR i = j);
 
+% The message sent by relay 'i' is consistent across all receivers, regardless
+% of whether 'i' is faulty (faults show up upon reading the message from the
+% channel).
+%
 % XXX LP: not sure if this is useful.
 % Proved
 % sal-inf-bmc -i -ice -d 1 om1_fault.sal relay_chans
@@ -645,19 +649,28 @@ relay_chans: LEMMA system_obs |-
         OR cal.msg[chan(i,r1)] = missing
         OR cal.msg[chan(i,r1)] = cal.msg[chan(i,r0)]);
 
-% Whenever two receivers have obtained values from relay 'i', they are equal
-% unless 'i' is faulty.
-% Unproven
-% XXX sal-inf-bmc -i -ice -d 1 om1_fault.sal relay_buffers
+% Assume source and relay 'i' are *not* faulty. Whenever two receivers have
+% obtained values from relay 'i', they are equal.
+%
+% BJ: I think this trivially follows from 'fault_propagation' b/c if source and
+% relay are good, the only possible value in buffer[-][i] is 'good' and, of
+% course, good = good.
+%
+% Note: lemma is not inductive if source is not assumed good (why?)
+%
+% Proved:
+% sal-inf-bmc -i -ice -d 1 -l fault_propagation om1_fault.sal relay_buffers
 relay_buffers: LEMMA system_obs |-
   G(FORALL (r0,r1: RECEIVERS):
       FORALL (i: RELAYS):
-        receivers_done[r0] AND receivers_done[r1] AND NOT f[i] =>
-          buffer[r0][i] = buffer[r1][i]);
+        NOT f[source_id] AND NOT f[i] =>
+          (  buffer[r0][i] = missing
+          OR buffer[r1][i] = missing
+          OR buffer[r0][i] = buffer[r1][i]));
 
 % Lemma relating values that appear on the calendar and in the buffers. This
-% requires adding a history variable tracking cal.msg. Here, the history
-% variable is called cal.hist.
+% requires adding a history variable tracking 'cal.msg'. Here, the history
+% variable is called 'cal.hist'
 %
 % Proved 2-inductive
 % TODO: refine to an inductive lemma
