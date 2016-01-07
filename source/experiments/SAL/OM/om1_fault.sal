@@ -626,7 +626,14 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 % Agreement lemmas
 % ------------------------------------------------------------
 
+%--- Experiments ----
+%--------------------
+
 % BJ: not clear if this lemma is useful
+%
+% This is meant to be the alternative case to the one proven in
+% 'relay_buffers' where here the source is explicitly faulty.
+%
 % Unproven
 % XXX sal-inf-bmc -i -ice -d 1 om1_fault.sal source_fault_in_buffer
 source_fault_in_buffer: LEMMA system_obs |-
@@ -638,8 +645,23 @@ source_fault_in_buffer: LEMMA system_obs |-
          (FORALL (r0,r1: RECEIVERS): buffer[r0][i] = buffer[r1][i])
    );
 
-% Unproven
-% XXX sal-inf-bmc -i -ice -d 1 -l fault_propagation om1_fault.sal fault_origin
+% BJ: not clear if this lemma is useful
+% Proved
+% sal-inf-bmc -i -ice -d 1 -l lemma_conj om1_fault.sal relay_done
+relay_done: LEMMA system_obs |-
+  G(FORALL (i: RELAYS):
+         relays_done[i]
+      => (FORALL (r: RECEIVERS):
+            (cal.msg[chan(i,r)] /= missing AND cal.time[chan(i,r)] >= t)
+            OR (null?(cal, chan(i,r)) AND buffer[r][i] /= missing))
+   );
+
+%--------------------
+
+
+
+% Proved!
+% sal-inf-bmc -i -ice -d 1 -l fault_propagation om1_fault.sal fault_origin
 fault_origin: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i,j: RELAYS):
