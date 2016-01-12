@@ -3,7 +3,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE PostfixOperators #-}
 {-# LANGUAGE ConstraintKinds #-}
 
@@ -43,7 +42,7 @@ general :: Constraints v
        -> Period
        -> ChanInput (Stored v)
        -> Monitor p ()
-general v per tx = do
+general v per tx =
   handler per "general_broadcast" $ do
     e <- emitter tx 1
     -- Broadcast whatever message (v) is passed in.
@@ -119,7 +118,7 @@ rnd2Handler
   -> (ChanOutput (Stored v), Integer)
   -> Monitor p ()
 rnd2Handler arr bufCnt res len (rx, i) =
-  handler rx ("rnd2_handler_lieutenant_" ++ show i) $ do
+  handler rx ("rnd2_handler_lieutenant_" ++ show i) $
     callback $ \msg -> do
       m  <- deref msg
       ix <- deref bufCnt
@@ -161,14 +160,14 @@ iVote arr = do
       , true
       ==> cntR += (-1)
       ]
-  return =<< deref cR
+  deref cR
 
 --------------------------------------------------------------------------------
 -- Helpers
 
 -- Fast majority votes over lists.
 vote :: Eq a => [a] -> a
-vote []     = error $ "Not enough elems!"
+vote []     = error "Not enough elems!"
 vote (l:ls) = vote' l 1 ls
   where
   vote' :: Eq a => a -> Int -> [a] -> a
