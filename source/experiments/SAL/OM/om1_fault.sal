@@ -609,6 +609,15 @@ abstract_a5:   LEMMA system_obs |- G(state = a5 => A5);
 % sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a4 -l abstract_a5 -l lemma_conj -l lemma_source -l lemma_relays -l lemma_receivers -l counter_candidate_ix om1_fault abstract_invt
 abstract_invt: LEMMA system_obs |- G(state /= bad);
 
+% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_all
+abstract_all: LEMMA system_obs |-
+  G(    (state = a1 => A1)
+    AND (state = a2 => A2)
+    AND (state = a3 => A3)
+    AND (state = a4 => A4)
+    AND (state = a5 => A5)
+    AND (state /= bad));
+
 % We'd like to prove the following lemma using the abstraction
 % order of doneness states
 %   1. before any relay is done, the source must be
