@@ -656,7 +656,7 @@ count_in_buffer(ix: RELAYS, max: RELAYS, buffer: ARRAY RELAYS of MESSAGE, m: MES
   ENDIF;
 
 
-%==  Invariants  ==
+%==  Basic Invariants  ==
 
 global_time_not_null(t: TIME): BOOLEAN = t /= -1;
 
@@ -669,14 +669,16 @@ missing_cal(cal: CALENDAR): BOOLEAN =
 unique_atomic(cal: CALENDAR): BOOLEAN =
   FORALL (i,j: CHANNEL): cal.time[i] = -2 AND cal.time[j] = -2 => i = j;
 
-% node specific invariants
 
+% Not clear if useful
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault lemma_source
 lemma_source: LEMMA
 system_obs |-
   G(NOT source_done => (FORALL (i: RELAYS): null?(cal, chan(source_id, i))));
 
+
+% Not clear if useful
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault lemma_relays
 lemma_relays: LEMMA
@@ -691,6 +693,8 @@ system_obs |-
                                        AND buffers[r][i] = missing))
   );
 
+
+% Not clear if useful
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault lemma_receivers
 lemma_receivers: LEMMA
@@ -703,6 +707,8 @@ system_obs |-
       % AND (receivers_done[r] => FORALL (i: RELAYS): null?(cal, chan(i, r)))
   );
 
+
+% Very useful
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 om1_fault.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
@@ -711,6 +717,7 @@ lemma_conj: LEMMA system_obs |-
     AND missing_cal(cal)
     AND unique_atomic(cal)
    );
+
 
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault.sal fault_propagation
@@ -726,12 +733,14 @@ fault_propagation: LEMMA system_obs |-
                    => f[source_id])));          % faulty msg in cal must come from
                                                 % faulty source
 
+
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
 missing_buffer_size: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i: RELAYS):
         buffer_size[r] + count_in_buffer(relay1_id, relay3_id, buffers[r], missing) = 3);
+
 
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
@@ -742,6 +751,7 @@ one_faulty_in_buffers: LEMMA system_obs |-
         AND is_faulty_msg?(buffers[r][j])
         AND validity(f)
         => i = j);
+
 
 % Main invarinant of what happens during the voting mode.
 % Proved:
@@ -791,6 +801,7 @@ counter_candidate_ix: LEMMA system_obs |-
        )
    );
 
+
 % Proved:
 % sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
 counter_majority: LEMMA system_obs |-
@@ -817,17 +828,96 @@ counter_majority: LEMMA system_obs |-
          )
    );
 
+
+% Invariant of the voting machine when at most one node is faulty (incl.
+% possibly the source node)
+%
+% Vote example in the non-majority setting:
+%
+% buffer: 4 5 6
+% steps:
+%
+%   ixs <- 1;    c <- missing;  cnt <- 0
+%   ixs <- 2;    c <- 4;        cnt <- 1
+%   ixs <- 3;    c <- 4;        cnt <- 0
+%   ixs <- 4;    c <- 6;        cnt <- 1
+%
+% output: 6
+%
+% If source is faulty and happens to send same message to two different
+% relays, we get this:
+%
+% buffer: 2 6 6
+% steps:
+%
+%   ixs <- 1;  c <- missing;  cnt <- 0
+%   ixs <- 2;  c <- 2;        cnt <- 1
+%   ixs <- 3;  c <- 2;        cnt <- 0
+%   ixs <- 4;  c <- 6;        cnt <- 1
+%
+% output: 6
+%
+%
+% Conjecture: vote returns the _last_ element with largest representation
+%
+% Unproven
+% sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
+
+counter_non_majority: LEMMA system_obs |-
+  G(FORALL (r: RECEIVERS):
+      mfa(f) AND f[source_id] =>
+           (ixs[r] = 1  % init
+              AND candidate[r] = missing
+              AND counters[r] = 0
+           )
+        OR (ixs[r] = 2  % read first element
+              AND candidate[r] = buffers[r][1]
+              AND counters[r] = 1
+           )
+        OR (ixs[r] = 3  % 2nd element same as 1st
+              AND counters[r]  = 2
+              AND candidate[r] = buffers[r][1]
+           )
+        OR (ixs[r] = 3  % 2nd element different from 1st
+              AND counters[r]  = 0
+              AND candidate[r] = buffers[r][1]
+           )
+        OR (ixs[r] = 4 % there is a majority
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  candidate[r]) >= 2
+              AND (   candidate[r] = buffers[r][1]
+                   OR candidate[r] = buffers[r][3]
+                  )
+           )
+        OR (ixs[r] = 4 % there is no majority
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  candidate[r]) = 1
+              AND candidate[r] = buffers[r][3]
+           )
+   );
+
+
 % Proved!
 % sal-inf-bmc -i --disable-traceability -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
+
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       mode[r] = done AND validity(f) => votes[r] = good_msg);
 
-%==   Main Theorems   ==
 
+%=====  Main Theorem: Validity
+%
+% The system satisfies the validity property under the condition that at most
+% one node is faulty and that the source is not faulty.
+%
 % Proved!
 % sal-inf-bmc -i --disable-traceability -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
+%
+%=====
+
 validity: THEOREM system_obs |- G(validity(f) => v_ok);
+
+
 
 
 %===----------------------------------------------------------
@@ -835,27 +925,10 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 %===----------------------------------------------------------
 
 
-%==  Experiments  ==
-
-% BJ: not clear if this lemma is useful
-%
-% This is meant to be the alternative case to the one proven in
-% 'relay_buffers' where here the source is explicitly faulty.
-%
-% Unproven
-% XXX sal-inf-bmc -i --disable-traceability -d 1 om1_fault.sal source_fault_in_buffer
-source_fault_in_buffer: LEMMA system_obs |-
-  G(FORALL (i: RELAYS):
-         f[source_id]
-         AND NOT f[i]
-         AND (FORALL (r: RECEIVERS): receivers_done[r])
-      =>
-         (FORALL (r0,r1: RECEIVERS): buffers[r0][i] = buffers[r1][i])
-   );
-
 % BJ: not clear if this lemma is useful
 % Proved
 % sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault.sal relay_done
+
 relay_done: LEMMA system_obs |-
   G(FORALL (i: RELAYS):
          relays_done[i]
@@ -863,9 +936,6 @@ relay_done: LEMMA system_obs |-
             (cal.msg[chan(i,r)] /= missing AND cal.time[chan(i,r)] >= t)
             OR (null?(cal, chan(i,r)) AND buffers[r][i] /= missing))
    );
-
-%==  END Experiments  ==
-
 
 
 % Proved!
@@ -885,12 +955,14 @@ fault_origin: LEMMA system_obs |-
 % XXX LP: not sure if this is useful.
 % Proved
 % sal-inf-bmc -i --disable-traceability -d 1 om1_fault.sal relay_chans
+
 relay_chans: LEMMA system_obs |-
   G(FORALL (r0,r1: RECEIVERS):
       FORALL (i: RELAYS):
            cal.msg[chan(i,r0)] = missing
         OR cal.msg[chan(i,r1)] = missing
         OR cal.msg[chan(i,r1)] = cal.msg[chan(i,r0)]);
+
 
 % Assume source and relay 'i' are *not* faulty. Whenever two receivers have
 % obtained values from relay 'i', they are equal.
@@ -899,11 +971,12 @@ relay_chans: LEMMA system_obs |-
 % relay are good, the only possible value in buffer[-][i] is 'good' and, of
 % course, good = good.
 %
-% BJ: trying to prove the weaker version, I think it requires a latch at the
-% relay to save the sent value...
+% BJ: trying to prove the weaker (not assuming source is non-faulty) version,
+% I think it requires a latch at the relay to save the sent value...
 %
-% Unproven:
-% XXX sal-inf-bmc -i --disable-traceability -d 1 -l fault_propagation om1_fault.sal relay_buffers
+% Proved!
+% sal-inf-bmc -i -ice -d 1 -l abstract_all -l lemma_conj om1_fault.sal relay_buffers
+
 relay_buffers: LEMMA system_obs |-
   G(FORALL (r0,r1: RECEIVERS):
       FORALL (i: RELAYS):
@@ -946,27 +1019,26 @@ relay_buffers: LEMMA system_obs |-
 % agreement: THEOREM system_obs |- G(validity(f) => a_ok);
 
 
-% Work in progress
+%=====  Main Theorem: Agreement
+%
+% The system satisfies the agreement property under the condition that at most
+% one node is faulty (including, possibly, the source)
+%
+% Unproven
+% XXX sal-inf-bmc ...
+%
+%=====
+
 agreement: THEOREM system_obs |- G(mfa(f) => a_ok);
 
 
 
-% ----------------------------------------
-
-
-% system eventually finishes (at which point validity can be checked).
-% Alternatively, the safety property 'not_all_done' listed below can be
-% checked for counterexamples with bmc.
-%
-% unproved
-finish: THEOREM system_obs |- F(NOT not_done);
-
-
 %===--------------------------------------------------------------===
 %       Tests
-%===--------------------------------------------------------------===
-
+%
 % TESTS for bounded model checker; these are non-THEOREMS
+%
+%===--------------------------------------------------------------===
 
 % components finish eventually:
 source_test:    THEOREM system |- G(NOT source_done);
