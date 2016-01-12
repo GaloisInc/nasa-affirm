@@ -256,13 +256,17 @@ relay[i: RELAYS]: MODULE =
 BEGIN
     GLOBAL cal: CALENDAR
     INPUT  f: FAULTS, t: TIME
-    OUTPUT relay_done: BOOLEAN
+    OUTPUT
+      relay_done: BOOLEAN,
+      latch: MESSAGE
 INITIALIZATION
+    latch      = missing;
     relay_done = FALSE
 TRANSITION
     [
       relay_broadcast:
       (NOT relay_done) AND node_event?(cal, source_id, i, t) -->
+        latch' = msg(t, cal, f, source_id, i);
         cal' = LET m:MESSAGE     = msg(t, cal, f, source_id, i) IN
                LET cal1:CALENDAR = msg_send(cal,  i, receiver1_id, m, t) IN
                LET cal2:CALENDAR = msg_send(cal1, i, receiver2_id, m, t) IN
@@ -389,7 +393,10 @@ system: MODULE =
         clock
      [] source
      [] (WITH OUTPUT relays_done: ARRAY RELAYS OF BOOLEAN
-           ([] (x:RELAYS): RENAME relay_done TO relays_done[x] IN relay[x]))
+         WITH OUTPUT latches: ARRAY RELAYS OF MESSAGE
+           ([] (x:RELAYS): RENAME relay_done TO relays_done[x]
+                           IN RENAME latch TO latches[x]
+                           IN relay[x]))
      [] (WITH OUTPUT receivers_done: ARRAY RECEIVERS OF BOOLEAN
          WITH OUTPUT counters:       ARRAY RECEIVERS OF [0..3]
          WITH OUTPUT ixs:            ARRAY RECEIVERS OF [1..4]
@@ -459,7 +466,9 @@ abstractor: MODULE =
 BEGIN
   INPUT
     cal: CALENDAR,
+    f: ARRAY IDENTITY OF BOOLEAN,
     source_done: BOOLEAN,
+    latches: ARRAY RELAYS OF MESSAGE,
     relays_done: ARRAY RELAYS OF BOOLEAN,
     receivers_done: ARRAY RECEIVERS OF BOOLEAN,
     buffers: ARRAY RECEIVERS OF ARRAY RELAYS OF MESSAGE,
@@ -471,7 +480,7 @@ BEGIN
     % No messages have been sent or received yet
     A1 =     (FORALL (c: CHANNEL): null?(cal, c))
          AND NOT source_done
-         AND (FORALL (i: RELAYS): NOT relays_done[i])
+         AND (FORALL (i: RELAYS): NOT relays_done[i] AND latches[i] = missing)
          AND (FORALL (r: RECEIVERS): NOT receivers_done[r]
                 AND votes[r] = missing
                 AND (FORALL (i: RELAYS): buffers[r][i] = missing));
@@ -479,44 +488,46 @@ BEGIN
     % source has sent it's message
     A2 =      (FORALL (c: CHANNEL): null?(cal, c) <=> c > 3)
          AND source_done
-         AND (FORALL (i: RELAYS): NOT relays_done[i])
+         AND (FORALL (i: RELAYS): NOT relays_done[i] AND latches[i] = missing)
          AND (FORALL (i: RECEIVERS): NOT receivers_done[i]
                 AND votes[i] = missing)
          AND (FORALL (i: RELAYS, j: RECEIVERS): buffers[j][i] = missing);
 
     % at least one relay is done; no receivers are done
+    % XXX remove fault + latch clauses to external lemma (also A4, A5)
     A3 =     source_done
+         AND (FORALL (i: RELAYS): relays_done[i] <=> latches[i] /= missing)
          AND (EXISTS (i: RELAYS): relays_done[i])
-               % null?(cal, chan(source_id, i))
-               %AND relays_done[i])
          AND (FORALL (i: RECEIVERS): NOT receivers_done[i]
                 AND votes[i] = missing)
          AND (FORALL (i: RELAYS, j: RECEIVERS):
-                   (NOT relays_done[i] AND     null?(cal, chan(i,j)) AND buffers[j][i] = missing)
-                OR (    relays_done[i] AND NOT null?(cal, chan(i,j)) AND buffers[j][i] = missing)
-                OR (    relays_done[i] AND     null?(cal, chan(i,j)) AND buffers[j][i] /= missing)
+                   (NOT relays_done[i] AND null?(cal, chan(i,j))           AND buffers[j][i] = missing)
+                OR (    relays_done[i] AND cal.msg[chan(i,j)] = latches[i] AND buffers[j][i] = missing)
+                OR (    relays_done[i] AND null?(cal, chan(i,j))           AND
+buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
              );
 
     % all relays are done; at least one receiver is done
     A4 =     source_done
-         AND (FORALL (i: RELAYS): relays_done[i]
-                )  % AND null?(cal, chan(source_id,i)))
+         AND (FORALL (i: RELAYS): relays_done[i] AND latches[i] /= missing)
          AND (EXISTS (r: RECEIVERS): receivers_done[r]
-                AND votes[r] /= missing
+                %AND votes[r] /= missing
+                AND (EXISTS (i: RELAYS): votes[r] = buffers[r][i])
                 AND (FORALL (i: RELAYS): null?(cal, chan(i,r))))
          AND (FORALL (i: RELAYS, j: RECEIVERS):
-                   (NOT null?(cal, chan(i,j)) AND buffers[j][i] = missing)
-                OR (    null?(cal, chan(i,j)) AND buffers[j][i] /= missing)
+                   (cal.msg[chan(i,j)] = latches[i] AND buffers[j][i] = missing)
+                OR (null?(cal, chan(i,j))           AND buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
              );
 
     % all nodes are done
     A5 =     source_done
          AND (FORALL (i: RELAYS): relays_done[i]
-                AND null?(cal, chan(source_id,i)))
+                AND latches[i] /= missing)
          AND (FORALL (r: RECEIVERS): receivers_done[r]
-                AND votes[r] /= missing)
+                %AND votes[r] /= missing
+                AND (EXISTS (i: RELAYS): votes[r] = buffers[r][i]))
          AND (FORALL (i: RELAYS, j: RECEIVERS):
-                null?(cal, chan(i,j)) AND buffers[j][i] /= missing)
+                null?(cal, chan(i,j)) AND buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
          AND (FORALL (c: CHANNEL): null?(cal, c));
 END;
 
