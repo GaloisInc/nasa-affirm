@@ -1,29 +1,53 @@
 digraph proof {
-    v [label="validity"];
-    cg [label="candidate_good"];
-    cm [label="counter_majority"];
-    cci [label="counter_candidate_ix"];
-    ofb [label="one_faulty_in_buffers"];
-    fp [label="fault_propagation"];
-    mbs [label="missing_buffer_size"];
-    lc [label="lemma_conj"];
+    graph [nodesep=0.6];
+    /* edge  [weight=0.8]; */
+    node [style=filled];
+
+    v [label="validity", fontcolor="blue"];
+    cg [label="candidate_good", fontcolor="blue"];
+
+    subgraph cluster_voting {
+        cm [label="counter_majority", fontcolor="blue"];
+        cci [label="counter_candidate_ix"];
+        cm -> cci;
+
+        label = "Voting";
+        color = "goldenrod";
+        fontcolor = "goldenrod";
+    }
+
+    subgraph cluster_fault {
+        ofb [label="one_faulty_in_buffers", fontcolor="blue"];
+        fp [label="fault_propagation"];
+        ofb -> fp;
+
+        label = "Fault Model";
+        color = "goldenrod";
+        fontcolor = "goldenrod";
+    }
+
+    subgraph cluster_framework {
+        mbs [label="missing_buffer_size"];
+        lc [label="lemma_conj"];
+        mbs -> lc;
+
+        label = "Generic Framework";
+        color = "goldenrod";
+        fontcolor = "goldenrod";
+    }
 
     v -> cg;
     v -> cci;
+    v -> ofb [style=invis];
 
     cg -> cm;
     cg -> cci;
     cg -> ofb;
 
-    cm -> cci;
     cm -> ofb;
     cm -> mbs;
 
     cci -> mbs;
-
-    ofb -> fp;
-
-    mbs -> lc;
 
     fp -> lc;
 }
