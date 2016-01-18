@@ -2,6 +2,7 @@
 
 # BSD License
 # Copyright (c) 2008, Lee Pike (Galois, Inc.) leepike [at] galois.com
+# Copyright (c) 2015, Benjamin Jones (Galois, Inc.) <bjones@galois.com>
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
@@ -59,11 +60,14 @@
 # -h --help : displays help (No help exists; please read these comments).
 
 # -p --proof : the optional file to which the output of running the proofs
-# -should be placed.  Output is a list of proof commands and either 'proved' or
-# -a counterexample.
+# should be placed.  Output is a list of proof commands and either 'proved' or
+# a counterexample.
 
 # -e --error : the optional file to which standard out is placed.  For example,
-# -parser problems are placed here.
+# parser problems are placed here.
+#
+# -c --color : color failed proof checks in red
+#
 
 # WARNING: This script overwrites proof and error output files if they already
 # exist.
@@ -71,7 +75,7 @@
 SCRIPT=$0
 
 function usage {
-  echo "usage: $SCRIPT sal_file [[-p proof_out.prf] [-e error_out.err] [-h]]"
+  echo "usage: $SCRIPT sal_file [[-p proof_out.prf] [-e error_out.err] [-c] [-h]]"
   exit 0
 }
 
@@ -103,6 +107,10 @@ fi
 
 SALFILE=$1
 
+# default 'color start' and 'color end' commands
+CS=""
+CE=""
+
 # While there is more than one argument (the SAL file is always the first argument),
 # get the remaining arguments.
 while [ $# \> "1" ]; do
@@ -113,6 +121,9 @@ while [ $# \> "1" ]; do
         -e | --error )          shift # Shift past the flag.
                                 ERRFILE=$2
                                 ;;
+        -c | --color )          CS="\033[0;31m"  # red
+                                CE="\033[0m"     # no color
+                                ;;
         * )                     shift # Shift past the flag.
                                 ;;
     esac
@@ -120,9 +131,17 @@ while [ $# \> "1" ]; do
 done
 
 function cmd {
-    time egrep -e "^%[ ]*sal-" $SALFILE | sed "s/^%[ ]*//" | \
-      awk '{print "echo proving" ":" " " $0 "\n" $0}' | \
-      bash
+    IFS=$'\n'
+    declare -a lines=( $(egrep -e "^%[ ]*sal-" $SALFILE | sed "s/^%[ ]*//") )
+    unset IFS
+
+    printf "\n** Found %d proof commands\n\n" ${#lines[@]}
+    for ((i=0; i < ${#lines[@]}; i++))
+    do
+        printf "[proving]: %s\n" "${lines[$i]}"
+        ${lines[$i]} 2>&1 |\
+            awk '/failed/ {print "'$CS'" $0 "'$CE'"} /proved/ {print $0}'
+    done
 }
 
 # Write out to standard out and err to standard error.
