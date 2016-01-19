@@ -109,6 +109,7 @@ SALFILE=$1
 
 # default 'color start' and 'color end' commands
 CS=""
+CG=""
 CE=""
 
 # While there is more than one argument (the SAL file is always the first argument),
@@ -122,6 +123,7 @@ while [ $# \> "1" ]; do
                                 ERRFILE=$2
                                 ;;
         -c | --color )          CS="\033[0;31m"  # red
+                                CG="\033[0;32m"  # green
                                 CE="\033[0m"     # no color
                                 ;;
         * )                     shift # Shift past the flag.
@@ -136,12 +138,23 @@ function cmd {
     unset IFS
 
     printf "\n** Found %d proof commands\n\n" ${#lines[@]}
+    local pass=0
+    local fail=0
     for ((i=0; i < ${#lines[@]}; i++))
     do
         printf "[proving]: %s\n" "${lines[$i]}"
         ${lines[$i]} 2>&1 |\
             awk '/failed/ {print "'$CS'" $0 "'$CE'"} /proved/ {print $0}'
+        if [ $? != 0 ]; then
+            fail=$(($fail+1))
+        else
+            pass=$(($pass+1))
+        fi
     done
+
+    printf "\n"
+    printf "** ${CG}Proofs OK %d${CE} / ${CS}Proofs FAILED %d${CE} **\n" $pass $fail
+    printf "\n"
 }
 
 # Write out to standard out and err to standard error.
