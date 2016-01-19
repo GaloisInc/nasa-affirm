@@ -909,39 +909,44 @@ counter_majority: LEMMA system_obs |-
 % Conjecture: vote returns the _last_ element with largest representation
 %
 % Proved
-% sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_non_majority
+% sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size -l counter_candidate_ix om1_fault.sal counter_non_majority
 
 counter_non_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       mfa(f) AND f[source_id] =>
            (ixs[r] = 1  % init
               AND candidate[r] = missing
-              AND counters[r] = 0
-           )
+              AND counters[r] = 0)
         OR (ixs[r] = 2  % read first element
               AND candidate[r] = buffers[r][1]
               AND counters[r] = 1
-           )
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  candidate[r]) >= 1)
         OR (ixs[r] = 3  % 2nd element same as 1st
               AND counters[r]  = 2
               AND candidate[r] = buffers[r][1]
-           )
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  candidate[r]) >= 2)
         OR (ixs[r] = 3  % 2nd element different from 1st
               AND counters[r]  = 0
+              AND buffers[r][1] /= buffers[r][2]
               AND candidate[r] = buffers[r][1]
-           )
-        OR (ixs[r] = 4 % there is a majority
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  candidate[r]) <= 2)
+        OR (ixs[r] = 4  % there is a majority
               AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
                                   candidate[r]) >= 2
-              AND (   candidate[r] = buffers[r][1]
-                   OR candidate[r] = buffers[r][3]
-                  )
-           )
-        OR (ixs[r] = 4 % there is no majority
+              AND (EXISTS (i: RELAYS): candidate[r] = buffers[r][i]))
+              % AND (   candidate[r] = buffers[r][1]
+              %      OR candidate[r] = buffers[r][3]))
+        OR (ixs[r] = 4  % there is no majority
               AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
-                                  candidate[r]) = 1
-              AND candidate[r] = buffers[r][3]
-           )
+                                  buffers[r][1]) = 1
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  buffers[r][2]) = 1
+              AND count_in_buffer(relay1_id, ixs[r]-1, buffers[r],
+                                  buffers[r][3]) = 1
+              AND candidate[r] = buffers[r][3])
    );
 
 
@@ -1072,8 +1077,9 @@ relay_buffers: LEMMA system_obs |-
 % The system satisfies the agreement property under the condition that at most
 % one node is faulty (including, possibly, the source)
 %
-% Unproven
-% XXX sal-inf-bmc ...
+%
+% Proved!!!
+% sal-inf-bmc -i -ice -d 1 -l abstract_all -l lemma_conj -l fault_propagation -l counter_candidate_ix -l counter_non_majority -l counter_majority om1_fault agreement
 %
 %=====
 
