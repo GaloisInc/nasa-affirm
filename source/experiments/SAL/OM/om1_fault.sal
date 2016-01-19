@@ -477,7 +477,7 @@ TRANSITION
 END;
 
 
-ABSTRACT_STATE: TYPE = {a1, a2, a3, a4, a5, bad};
+ABSTRACT_STATE: TYPE = {a1, a2, a3, a3b, a4, a5, bad};
 
 abstractor: MODULE =
 BEGIN
@@ -491,7 +491,7 @@ BEGIN
     buffers: ARRAY RECEIVERS OF ARRAY RELAYS OF MESSAGE,
     votes: ARRAY RECEIVERS OF MESSAGE
   OUTPUT
-    A1, A2, A3, A4, A5: BOOLEAN
+    A1, A2, A3, A3b, A4, A5: BOOLEAN
   DEFINITION
 
     % No messages have been sent or received yet
@@ -513,10 +513,13 @@ BEGIN
     % at least one relay is done; no receivers are done
     % XXX remove fault + latch clauses to external lemma (also A4, A5)
     A3 =     source_done
-         AND (FORALL (i: RELAYS): relays_done[i] <=> latches[i] /= missing)
+         AND (FORALL (i: RELAYS): relays_done[i] =>
+                null?(cal, chan(source_id, i))
+                AND latches[i] /= missing)
          AND (EXISTS (i: RELAYS): relays_done[i])
-         AND (FORALL (i: RECEIVERS): NOT receivers_done[i]
-                AND votes[i] = missing)
+         AND (FORALL (r: RECEIVERS): NOT receivers_done[r]
+                AND null?(cal, chan(r,r))
+                AND votes[r] = missing)
          AND (FORALL (i: RELAYS, j: RECEIVERS):
                    (NOT relays_done[i] AND null?(cal, chan(i,j))           AND buffers[j][i] = missing)
                 OR (    relays_done[i] AND cal.msg[chan(i,j)] = latches[i] AND buffers[j][i] = missing)
@@ -524,13 +527,29 @@ BEGIN
 buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
              );
 
-    % all relays are done; at least one receiver is done
+    % all relays are done, but no receivers are done
+    A3b =     source_done
+         AND (FORALL (i: RELAYS): relays_done[i]
+                AND null?(cal, chan(source_id, i))
+                AND latches[i] /= missing)
+         AND (FORALL (r: RECEIVERS): NOT receivers_done[r])
+         AND (FORALL (i: RELAYS, j: RECEIVERS):
+                   (cal.msg[chan(i,j)] = latches[i] AND buffers[j][i] = missing)
+                OR (null?(cal, chan(i,j))           AND buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
+             );
+
+    % all relays are done; at least one receiver is done and one is not done
     A4 =     source_done
-         AND (FORALL (i: RELAYS): relays_done[i] AND latches[i] /= missing)
-         AND (EXISTS (r: RECEIVERS): receivers_done[r]
-                %AND votes[r] /= missing
-                AND (EXISTS (i: RELAYS): votes[r] = buffers[r][i])
-                AND (FORALL (i: RELAYS): null?(cal, chan(i,r))))
+         AND (FORALL (i: RELAYS): relays_done[i]
+                AND null?(cal, chan(source_id, i))
+                AND latches[i] /= missing)
+         AND (EXISTS (r: RECEIVERS): receivers_done[r])
+         AND (FORALL (r: RECEIVERS): receivers_done[r] =>
+                (EXISTS (i: RELAYS): votes[r] = buffers[r][i])
+                AND (FORALL (i: RELAYS): null?(cal, chan(i,r)))
+                AND (FORALL (i: RELAYS): NOT f[i] => buffers[r][i] = latches[i])
+                AND null?(cal, chan(r,r)))
+         AND (EXISTS (r: RECEIVERS): NOT receivers_done[r])
          AND (FORALL (i: RELAYS, j: RECEIVERS):
                    (cal.msg[chan(i,j)] = latches[i] AND buffers[j][i] = missing)
                 OR (null?(cal, chan(i,j))           AND buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
@@ -539,19 +558,20 @@ buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
     % all nodes are done
     A5 =     source_done
          AND (FORALL (i: RELAYS): relays_done[i]
+                AND null?(cal, chan(source_id, i))
                 AND latches[i] /= missing)
          AND (FORALL (r: RECEIVERS): receivers_done[r]
-                %AND votes[r] /= missing
-                AND (EXISTS (i: RELAYS): votes[r] = buffers[r][i]))
-         AND (FORALL (i: RELAYS, j: RECEIVERS):
-                null?(cal, chan(i,j)) AND buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
-         AND (FORALL (c: CHANNEL): null?(cal, c));
+                AND (EXISTS (i: RELAYS): votes[r] = buffers[r][i])
+                AND null?(cal, chan(r,r)))
+         AND (FORALL (i: RELAYS, j: RECEIVERS): null?(cal, chan(i,j))
+                AND buffers[j][i] /= missing
+                AND (NOT f[i] => buffers[j][i] = latches[i]));
 END;
 
 
 abstract_monitor: MODULE =
 BEGIN
-  INPUT A1, A2, A3, A4, A5: BOOLEAN
+  INPUT A1, A2, A3, A3b, A4, A5: BOOLEAN
   LOCAL state: ABSTRACT_STATE
   INITIALIZATION
     state = a1
@@ -570,9 +590,15 @@ BEGIN
                    ENDIF
     []
       state = a3 -->
-        state' = IF      A3' THEN a3
-                   ELSIF A4' THEN a4
-                   ELSE           bad
+        state' = IF      A3'  THEN a3
+                   ELSIF A3b' THEN a3b
+                   ELSE            bad
+                   ENDIF
+    []
+      state = a3b -->
+        state' = IF      A3b' THEN a3b
+                   ELSIF A4'  THEN a4
+                   ELSE            bad
                    ENDIF
     []
       state = a4 -->
@@ -614,6 +640,9 @@ abstract_a2:   LEMMA system_obs |- G(state = a2 => A2);
 % sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a3
 abstract_a3:   LEMMA system_obs |- G(state = a3 => A3);
 
+% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a3b
+abstract_a3b:   LEMMA system_obs |- G(state = a3b => A3b);
+
 % sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a4
 abstract_a4:   LEMMA system_obs |- G(state = a4 => A4);
 
@@ -623,15 +652,16 @@ abstract_a5:   LEMMA system_obs |- G(state = a5 => A5);
 % 'abstract_invt' is used to show that the abstraction is sound
 %
 % Proved: (using many lemmas)
-% sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a4 -l abstract_a5 -l lemma_conj -l lemma_source -l lemma_relays -l lemma_receivers -l counter_candidate_ix om1_fault abstract_invt
+% sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b-l abstract_a4 -l abstract_a5 -l lemma_conj -l lemma_source -l lemma_relays -l lemma_receivers -l counter_candidate_ix om1_fault abstract_invt
 abstract_invt: LEMMA system_obs |- G(state /= bad);
 
 % Proved:
-% sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a4 -l abstract_a5 -l lemma_conj -l counter_candidate_ix om1_fault abstract_all
+% sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b -l abstract_a4 -l abstract_a5 -l lemma_conj -l counter_candidate_ix om1_fault abstract_all
 abstract_all: LEMMA system_obs |-
   G(    (state = a1 => A1)
     AND (state = a2 => A2)
     AND (state = a3 => A3)
+    AND (state = a3b => A3b)
     AND (state = a4 => A4)
     AND (state = a5 => A5)
     AND (state /= bad));
