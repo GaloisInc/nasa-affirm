@@ -566,6 +566,9 @@ buffers[j][i] /= missing AND (NOT f[i] => buffers[j][i] = latches[i]))
          AND (FORALL (i: RELAYS, j: RECEIVERS): null?(cal, chan(i,j))
                 AND buffers[j][i] /= missing
                 AND (NOT f[i] => buffers[j][i] = latches[i]));
+  TRANSITION
+    [ ELSE --> ]
+
 END;
 
 
