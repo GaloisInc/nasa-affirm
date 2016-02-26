@@ -20,6 +20,7 @@
 %         Lee Pike                            , Galois Inc. (2015)
 
 
+
 om1_fault: CONTEXT =
 BEGIN
 
@@ -628,38 +629,42 @@ system_obs : MODULE = system || observer || abstractor || abstract_monitor;
 %       Verification
 %===--------------------------------------------------------------===
 
+% Options passed to each 'sal-inf-bmc' invocation by the runproof script
+%
+% runproof: --disable-traceability -s yices2
+%
 
 %==  Abstraction Lemmas  ==
 
-% sal-inf-bmc -d 1 om1_fault abstract_init
+% sal-inf-bmc  -d 1 om1_fault abstract_init
 abstract_init: LEMMA system_obs |- A1;
 
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a1
+% sal-inf-bmc -i  -d 1 om1_fault abstract_a1
 abstract_a1:   LEMMA system_obs |- G(state = a1 => A1);
 
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a2
+% sal-inf-bmc -i  -d 1 om1_fault abstract_a2
 abstract_a2:   LEMMA system_obs |- G(state = a2 => A2);
 
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a3
+% sal-inf-bmc -i  -d 1 om1_fault abstract_a3
 abstract_a3:   LEMMA system_obs |- G(state = a3 => A3);
 
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a3b
+% sal-inf-bmc -i  -d 1 om1_fault abstract_a3b
 abstract_a3b:   LEMMA system_obs |- G(state = a3b => A3b);
 
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a4
+% sal-inf-bmc -i  -d 1 om1_fault abstract_a4
 abstract_a4:   LEMMA system_obs |- G(state = a4 => A4);
 
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault abstract_a5
+% sal-inf-bmc -i  -d 1 om1_fault abstract_a5
 abstract_a5:   LEMMA system_obs |- G(state = a5 => A5);
 
 % 'abstract_invt' is used to show that the abstraction is sound
 %
 % Proved: (using many lemmas)
-% sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b-l abstract_a4 -l abstract_a5 -l lemma_conj -l lemma_source -l lemma_relays -l lemma_receivers -l counter_candidate_ix om1_fault abstract_invt
+% sal-inf-bmc -i  -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b-l abstract_a4 -l abstract_a5 -l lemma_conj -l lemma_source -l lemma_relays -l lemma_receivers -l counter_candidate_ix om1_fault abstract_invt
 abstract_invt: LEMMA system_obs |- G(state /= bad);
 
 % Proved:
-% sal-inf-bmc -i -ice -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b -l abstract_a4 -l abstract_a5 -l lemma_conj -l counter_candidate_ix om1_fault abstract_all
+% sal-inf-bmc -i  -d 1 -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b -l abstract_a4 -l abstract_a5 -l lemma_conj -l counter_candidate_ix om1_fault abstract_all
 abstract_all: LEMMA system_obs |-
   G(    (state = a1 => A1)
     AND (state = a2 => A2)
@@ -675,7 +680,7 @@ abstract_all: LEMMA system_obs |-
 %   2. before any receiver is done, all relays must be
 %
 % Proved:
-% sal-inf-bmc -i -ice -d 1 -l abstract_invt om1_fault order_of_done
+% not used in main proofs: sal-inf-bmc -i -d 1 -l abstract_invt om1_fault order_of_done
 order_of_done: LEMMA
 system_obs |-
   G(    (EXISTS (i: RELAYS): relays_done[i]) => source_done
@@ -723,7 +728,7 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
 
 % Not clear if useful
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault lemma_source
+% sal-inf-bmc -i  -d 1 -l lemma_conj om1_fault lemma_source
 lemma_source: LEMMA
 system_obs |-
   G(NOT source_done => (FORALL (i: RELAYS): null?(cal, chan(source_id, i))));
@@ -731,7 +736,7 @@ system_obs |-
 
 % Not clear if useful
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault lemma_relays
+% sal-inf-bmc -i  -d 1 -l lemma_conj om1_fault lemma_relays
 lemma_relays: LEMMA
 system_obs |-
   G(FORALL(i: RELAYS):
@@ -747,7 +752,7 @@ system_obs |-
 
 % Not clear if useful
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault lemma_receivers
+% sal-inf-bmc -i  -d 1 -l lemma_conj om1_fault lemma_receivers
 lemma_receivers: LEMMA
 system_obs |-
   G(FORALL(r: RECEIVERS):
@@ -761,7 +766,7 @@ system_obs |-
 
 % Very useful
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault.sal lemma_conj
+% sal-inf-bmc -i  -d 1 om1_fault.sal lemma_conj
 lemma_conj: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
     AND global_time_not_null(t)
@@ -771,7 +776,7 @@ lemma_conj: LEMMA system_obs |-
 
 
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault.sal fault_propagation
+% sal-inf-bmc -i  -d 1 -l lemma_conj om1_fault.sal fault_propagation
 fault_propagation: LEMMA system_obs |-
   G(    (FORALL (j:RELAYS):                    % no faulty messages are stored here
            NOT is_faulty_msg?(cal.msg[chan(source_id, j)]))
@@ -786,7 +791,7 @@ fault_propagation: LEMMA system_obs |-
 
 
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
+% sal-inf-bmc -i  -d 1 -l lemma_conj om1_fault.sal missing_buffer_size
 missing_buffer_size: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i: RELAYS):
@@ -794,7 +799,7 @@ missing_buffer_size: LEMMA system_obs |-
 
 
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
+% sal-inf-bmc -i  -d 1 -l fault_propagation om1_fault.sal one_faulty_in_buffers
 one_faulty_in_buffers: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i,j: RELAYS):
@@ -806,7 +811,7 @@ one_faulty_in_buffers: LEMMA system_obs |-
 
 % Main invarinant of what happens during the voting mode.
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size om1_fault.sal counter_candidate_ix
+% sal-inf-bmc -i  -d 1 -l missing_buffer_size om1_fault.sal counter_candidate_ix
 counter_candidate_ix: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
     (    NOT receivers_done[r]
@@ -854,7 +859,7 @@ counter_candidate_ix: LEMMA system_obs |-
 
 
 % Proved:
-% sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
+% sal-inf-bmc -i  -d 1 -l missing_buffer_size -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal counter_majority
 
 counter_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -912,7 +917,7 @@ counter_majority: LEMMA system_obs |-
 % Conjecture: vote returns the _last_ element with largest representation
 %
 % Proved
-% sal-inf-bmc -i --disable-traceability -d 1 -l missing_buffer_size -l counter_candidate_ix om1_fault.sal counter_non_majority
+% sal-inf-bmc -i  -d 1 -l missing_buffer_size -l counter_candidate_ix om1_fault.sal counter_non_majority
 
 counter_non_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -954,7 +959,7 @@ counter_non_majority: LEMMA system_obs |-
 
 
 % Proved!
-% sal-inf-bmc -i --disable-traceability -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
+% sal-inf-bmc -i  -d 1 -l counter_majority -l counter_candidate_ix -l one_faulty_in_buffers om1_fault.sal candidate_good
 
 candidate_good: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -967,7 +972,7 @@ candidate_good: LEMMA system_obs |-
 % one node is faulty and that the source is not faulty.
 %
 % Proved!
-% sal-inf-bmc -i --disable-traceability -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
+% sal-inf-bmc -i  -d 1 -l candidate_good -l counter_candidate_ix om1_fault.sal validity
 %
 %=====
 
@@ -981,21 +986,8 @@ validity: THEOREM system_obs |- G(validity(f) => v_ok);
 %===----------------------------------------------------------
 
 
-% BJ: not clear if this lemma is useful
-% Proved
-% sal-inf-bmc -i --disable-traceability -d 1 -l lemma_conj om1_fault.sal relay_done
-
-relay_done: LEMMA system_obs |-
-  G(FORALL (i: RELAYS):
-         relays_done[i]
-      => (FORALL (r: RECEIVERS):
-            (cal.msg[chan(i,r)] /= missing AND cal.time[chan(i,r)] >= t)
-            OR (null?(cal, chan(i,r)) AND buffers[r][i] /= missing))
-   );
-
-
 % Proved!
-% sal-inf-bmc -i --disable-traceability -d 1 -l fault_propagation om1_fault.sal fault_origin
+% not used in main proofs: sal-inf-bmc -i  -d 1 -l fault_propagation om1_fault.sal fault_origin
 fault_origin: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
       FORALL (i,j: RELAYS):
@@ -1010,7 +1002,7 @@ fault_origin: LEMMA system_obs |-
 %
 % XXX LP: not sure if this is useful.
 % Proved
-% sal-inf-bmc -i --disable-traceability -d 1 om1_fault.sal relay_chans
+% not used in main proofs: sal-inf-bmc -i  -d 1 om1_fault.sal relay_chans
 
 relay_chans: LEMMA system_obs |-
   G(FORALL (r0,r1: RECEIVERS):
@@ -1031,7 +1023,7 @@ relay_chans: LEMMA system_obs |-
 % I think it requires a latch at the relay to save the sent value...
 %
 % Proved!
-% sal-inf-bmc -i -ice -d 1 -l abstract_all -l lemma_conj om1_fault.sal relay_buffers
+% not used in main proofs: sal-inf-bmc -i -ice -d 1 -l abstract_all -l lemma_conj om1_fault.sal relay_buffers
 
 relay_buffers: LEMMA system_obs |-
   G(FORALL (r0,r1: RECEIVERS):
@@ -1048,7 +1040,7 @@ relay_buffers: LEMMA system_obs |-
 %
 % Proved 2-inductive
 % TODO: refine to an inductive lemma
-% XXX sal-inf-bmc -i --disable-traceability -d 2 om1_fault.sal relay_to_recv_step
+% XXX sal-inf-bmc -i  -d 2 om1_fault.sal relay_to_recv_step
 %
 % relay_to_recv_step: LEMMA system_obs |-
 %   G(FORALL (r: RECEIVERS, i: RELAYS):
@@ -1070,7 +1062,7 @@ relay_buffers: LEMMA system_obs |-
 %     );
 
 % Proved assuming 'validity(f)' instead of 'mfa(f)'
-% RUN sal-inf-bmc -i --disable-traceability -d 1 -l counter_candidate_ix -l candidate_good om1_fault.sal agreement
+% RUN sal-inf-bmc -i  -d 1 -l counter_candidate_ix -l candidate_good om1_fault.sal agreement
 % UNCOMMENT LINE BELOW:
 % agreement: THEOREM system_obs |- G(validity(f) => a_ok);
 

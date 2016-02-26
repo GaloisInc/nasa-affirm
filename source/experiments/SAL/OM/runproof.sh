@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# set -e -u -x
+
 # BSD License
 # Copyright (c) 2008, Lee Pike (Galois, Inc.) leepike [at] galois.com
 # Copyright (c) 2015, Benjamin Jones (Galois, Inc.) <bjones@galois.com>
@@ -43,14 +45,14 @@
 # sitting right next to the corresponding theorems.
 
 # -- EXAMPLES ---
-# runproof2.sh --help : help
+# runproof.sh --help : help
 
-# runproof2.sh file.sal : outputs to stdout the results of proving file.sal.
+# runproof.sh file.sal : outputs to stdout the results of proving file.sal.
 
-# runproof2.sh file.sal -p proof_file : outputs to proof_file the results of
+# runproof.sh file.sal -p proof_file : outputs to proof_file the results of
 # proving file.sal.
 
-# runproof2.sh file.sal -p proof_file -e err_file : outputs to proof_file the
+# runproof.sh file.sal -p proof_file -e err_file : outputs to proof_file the
 # results of proving file.sal and outputs to err_file the standard error from
 # SAL.
 
@@ -132,6 +134,8 @@ while [ $# \> "1" ]; do
     shift
 done
 
+SALOPT=$(egrep -e '^% runproof: ' $SALFILE | tail -1 | cut -d ' ' -f 3-)
+
 function cmd {
     IFS=$'\n'
     declare -a lines=( $(egrep -e "^%[ ]*sal-" $SALFILE | sed "s/^%[ ]*//") )
@@ -142,10 +146,11 @@ function cmd {
     local fail=0
     for ((i=0; i < ${#lines[@]}; i++))
     do
-        printf "[proving]: %s\n" "${lines[$i]}"
-        ${lines[$i]} 2>&1 |\
+        local salcmd=${lines[$i]/sal-inf-bmc/sal-inf-bmc $SALOPT}
+        printf "[proving]: %s\n" "$salcmd"
+        exec $salcmd 2>&1 |\
             awk '/failed/ {print "'$CS'" $0 "'$CE'"} /proved/ {print $0}'
-        if [ $? != 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             fail=$(($fail+1))
         else
             pass=$(($pass+1))
@@ -158,15 +163,15 @@ function cmd {
 }
 
 # Write out to standard out and err to standard error.
-if [ -z $PRFFILE ] && [ -z $ERRFILE ]; then
+if [ -z ${PRFFILE:-} ] && [ -z ${ERRFILE:-} ]; then
  cmd
-# Write out to file $PRFFILE and err to standard error.
-elif [ -n $PRFFILE ] && [ -z $ERRFILE ]; then
- cmd > $PRFFILE
-# Write out to standard out and err to file $ERRFILE.
-elif [ -z $PRFFILE ] && [ -n $ERRFILE ]; then
- cmd &> $ERRFILE
-# Write out to file $PRFFILE and err to file $ERRFILE.
-elif [ -n $PRFFILE ] && [ -n $ERRFILE ]; then
- (cmd > $PRFFILE) &> $ERRFILE
+# Write out to file ${PRFFILE:-} and err to standard error.
+elif [ -n ${PRFFILE:-} ] && [ -z ${ERRFILE:-} ]; then
+ cmd > ${PRFFILE:-}
+# Write out to standard out and err to file ${ERRFILE:-}.
+elif [ -z ${PRFFILE:-} ] && [ -n ${ERRFILE:-} ]; then
+ cmd &> ${ERRFILE:-}
+# Write out to file ${PRFFILE:-} and err to file ${ERRFILE:-}.
+elif [ -n ${PRFFILE:-} ] && [ -n ${ERRFILE:-} ]; then
+ (cmd > ${PRFFILE:-}) &> ${ERRFILE:-}
 fi
