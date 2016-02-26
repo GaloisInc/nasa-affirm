@@ -5,13 +5,13 @@
 % Author: John Rushby, Computer Science Laboratory, SRI International (2004)
 % Modified: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2015)
 %
-om1: CONTEXT =
+om1 {; n: nznat, k: nznat}: CONTEXT =
 BEGIN
 
 stage: TYPE = [1..5];
 
-n: NATURAL = 5;
-k: NATURAL = 5;
+% n: NATURAL = 3;
+% k: NATURAL = 3;
 
 relays: TYPE = [1..n];
 receivers: TYPE = [1..k];
