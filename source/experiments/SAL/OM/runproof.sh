@@ -107,12 +107,14 @@ if [ ! -e $1 ]; then
   valid $1
 fi
 
-SALFILE=$1
+SALFILE="$1"
 
 # default 'color start' and 'color end' commands
 CS=""
 CG=""
 CE=""
+# default params
+SAL_PARAMS=""
 
 # While there is more than one argument (the SAL file is always the first argument),
 # get the remaining arguments.
@@ -127,6 +129,9 @@ while [ $# \> "1" ]; do
         -c | --color )          CS="\033[0;31m"  # red
                                 CG="\033[0;32m"  # green
                                 CE="\033[0m"     # no color
+                                ;;
+        -par | --parameters )   shift
+                                SAL_PARAMS=$2
                                 ;;
         * )                     shift # Shift past the flag.
                                 ;;
@@ -146,10 +151,19 @@ function cmd {
     local fail=0
     for ((i=0; i < ${#lines[@]}; i++))
     do
+        # insert SAL options
         local salcmd=${lines[$i]/sal-inf-bmc/sal-inf-bmc $SALOPT}
+        # replace SAL file name with the base name followed by any parameters
+        if [ -n "${SAL_PARAMS}" ]; then
+            salcmd=$(echo $salcmd | \
+                sed "s/\(${SALFILE%.sal}\)\(.sal\)\?/\1${SAL_PARAMS}/")
+        fi
         printf "[proving]: %s\n" "$salcmd"
         exec $salcmd 2>&1 |\
-            awk '/failed/ {print "'$CS'" $0 "'$CE'"} /proved/ {print $0}'
+            awk '/(failed|Error|induction rule failed)/ \
+                     {print "'$CS'" $0 "'$CE'"} \
+                 /(proved|no counterexample)/ \
+                     {print "'$CG'" $0 "'$CE'"}'
         if [ ${PIPESTATUS[0]} -ne 0 ]; then
             fail=$(($fail+1))
         else
