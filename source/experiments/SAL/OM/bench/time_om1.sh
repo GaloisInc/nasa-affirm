@@ -2,12 +2,6 @@
 
 set -e -o pipefail
 
-# source 'concurrent.lib.sh' from the current directory
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/concurrent.lib.sh"
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.lib.sh"
-
-SAL_SMC=$(resolve_prog sal-smc)
-
 ###  PARAMETERS  ###########################################
 
 mixed_params=(\
@@ -28,13 +22,22 @@ small_params=(\
 
 diag_params=("1,1" "2,2" "3,3" "4,4" "5,5")
 
+# Specify which parameter set to use
+param_set="${small_params[@]}"
 
 
 ###  JOB COMMANDS  #########################################
 
+# source 'concurrent.lib.sh' from the current directory
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/concurrent.lib.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.lib.sh"
+
+SAL_SMC=$(resolve_prog sal-smc)          # SAL symbolic model checker
+SAL_BMC=$(resolve_prog sal-inf-bmc)  # SAL inf-state bounded model checker
+
 # run SAL symbolic model checker with specific options, redirect output to a
 # temporary file, match the "total execution time" line and extract run time
-sal_cmd() {
+sal_smc_cmd() {
     local model=$1
     local tmp=$(mktemp sal_cmd.XXXXXX -ut)
 
@@ -51,40 +54,47 @@ sal_cmd() {
     rm "$tmp"
 }
 
-main() {
-    local params=("${mixed_params[@]}")
+sal_bmc_cmd() {
+    local model=$1
+    local par=$2
+    local tmp=$(mktemp sal_cmd.XXXXXX -ut)
+
+    ./runproof.sh $model -par $par \
+        2>&1 | tee "$tmp"
+    local code=$?
+
+    # output run time next to job status
+    cat "$tmp" | awk "/total time ellapsed/ {print \"proved. time\", \$4, \"s\"}" >&3
+    rm "$tmp"
+    exit $code
+}
+
+main_rushby() {
+    local params=($1)
     local jobs=( )
 
     for p in "${params[@]}"; do
-        jobs=("${jobs[@]}" - "prove 'vaa' for om1{$p}" sal_cmd "om1{$p}")
+        jobs=("${jobs[@]}" - "(sal-smc) prove 'vaa' for om1{$p}" \
+              sal_smc_cmd "om1{$p}")
     done
 
     concurrent "${jobs[@]}"
 }
 
-main
+main_affirm() {
+    local params=($1)
+    local jobs=( )
 
+    for p in "${params[@]}"; do
+        jobs=("${jobs[@]}" - \
+              "(sal-inf-bmc) prove 'validity' & 'agreement' for om1_cal{$p}" \
+              sal_bmc_cmd "om1_cal.sal" "{$p}")
+    done
 
+    concurrent "${jobs[@]}"
+}
 
-# OLD sequential run
-#
-# for p in "${params[@]}"; do
-#     printf "proving $p\n"
-#     $sal_cmd "om1{$p}" vaa 2>&1 | \
-#         awk "\
-#              /^proved/          {print} \
-#              /^total execution/ {print \"size $p time\", \$4} \
-#             "
-# done
+# param_set is specified above
+#main_smc "${param_set[@]}"
+main_affirm "${param_set[@]}"
 
-# Example from concurrent.lib.sh
-#
-#    local args=(
-#        - "Creating VM"                                         create_vm    3.0
-#        - "Creating ramdisk"                                    my_sleep     0.1
-#        - "Enabling swap"                                       my_sleep     0.1
-#
-#        --require "Creating VM"
-#        --before  "Creating ramdisk"
-#        --before  "Enabling swap"
-#    )

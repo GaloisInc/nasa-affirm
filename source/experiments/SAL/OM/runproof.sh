@@ -162,6 +162,7 @@ function cmd {
     printf "\n** Found %d proof commands\n\n" ${#lines[@]}
     local pass=0
     local fail=0
+    local start="$(date +%s)"
     for ((i=0; i < ${#lines[@]}; i++))
     do
         # insert SAL options
@@ -183,10 +184,14 @@ function cmd {
             pass=$(($pass+1))
         fi
     done
+    local end="$(date +%s)"
 
     printf "\n"
     printf "** ${CG}Proofs OK %d${CE} / ${CS}Proofs FAILED %d${CE} **\n" $pass $fail
     printf "\n"
+
+    local t=$(($end-$start))
+    printf "total time ellapsed: $t seconds"
 }
 
 # Write out to standard out and err to standard error.
