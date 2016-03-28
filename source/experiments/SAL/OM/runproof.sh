@@ -141,9 +141,22 @@ done
 
 SALOPT=$(egrep -e '^% runproof: ' $SALFILE | tail -1 | cut -d ' ' -f 3-)
 
+function findsal {
+  local file=$1
+  cat $file | \
+    # look only at comment lines
+    egrep -e "^%" | \
+    # remove the comment and whitespace from every line
+    sed "s/^%[ ]*//" | \
+    # join lines that end with a \ into one line
+    awk '{if (sub(/\\$/,"")) printf "%s ", $0; else print $0}' | \
+    # match lines starting with a commented sal command
+    egrep -e "^sal-"
+}
+
 function cmd {
     IFS=$'\n'
-    declare -a lines=( $(egrep -e "^%[ ]*sal-" $SALFILE | sed "s/^%[ ]*//") )
+    declare -a lines=( $(findsal $SALFILE) )
     unset IFS
 
     printf "\n** Found %d proof commands\n\n" ${#lines[@]}
