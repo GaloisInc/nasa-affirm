@@ -22,7 +22,7 @@ small_params=(\
     "3,1" "2,2" "1,3" \
 )
 
-diag_params=("1,1" "2,2" "3,3" "4,4" "5,5" "6,6" "7,7")
+diag_params=("1,1" "2,2" "3,3" "4,4" "5,5" "6,6" "7,7" "8,8" "9,9" "10,10")
 
 # Specify which parameter set to use
 param_set="${mixed_params[@]}"
@@ -54,6 +54,7 @@ sal_smc_cmd() {
     timeout $TIME_LIMIT \
         ${SAL_SMC} -v 1 \
         --disable-traceability \
+        --backward \
         --enable-slicer \
         --enable-dynamic-reorder \
         "${model}{$par}" vaa \

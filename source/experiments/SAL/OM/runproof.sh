@@ -77,7 +77,14 @@
 SCRIPT=$0
 
 function usage {
-  echo "usage: $SCRIPT sal_file [[-p proof_out.prf] [-e error_out.err] [-c] [-h]]"
+  echo "usage: $SCRIPT sal_file [OPTIONS]"
+  echo ""
+  echo "  where OPTIONS: [-p proof_out.prf]  proof output file"
+  echo "                 [-e error_out.err]  error output file"
+  echo "                 [-c]                enable colored output"
+  echo "                 [-par]              parameters to SAL model"
+  echo "                 [-h]                print usage"
+  echo ""
   exit 0
 }
 
@@ -173,16 +180,20 @@ function cmd {
                 sed "s/\(${SALFILE%.sal}\)\(.sal\)\?/\1${SAL_PARAMS}/")
         fi
         printf "[proving]: %s\n" "$salcmd"
+        local tmp=$(mktemp runproof.XXXXXXXX -ut)
         exec $salcmd 2>&1 |\
+            tee $tmp |\
             awk '/(failed|Error|induction rule failed)/ \
                      {print "'$CS'" $0 "'$CE'"} \
                  /(proved|no counterexample)/ \
                      {print "'$CG'" $0 "'$CE'"}'
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        egrep -E -q '(failed|Error|induction rule failed)' $tmp
+        if [ $? -eq 0 ]; then
             fail=$(($fail+1))
         else
             pass=$(($pass+1))
         fi
+        rm $tmp
     done
     local end="$(date +%s)"
 
