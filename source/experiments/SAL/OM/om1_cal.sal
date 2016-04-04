@@ -207,7 +207,7 @@ empty_calendar: CALENDAR =
 
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
-  IF f[i] = byzantine OR (f[i] = symmetric AND i /= source_id) THEN
+  IF f[i] = byzantine OR f[i] = symmetric THEN
     % The symmetric case is further constrained below, see 'mfa'.
     % Note: the case of a source with symmetric fault is equivalent to
     % the non-faulty case.
