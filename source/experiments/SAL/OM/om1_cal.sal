@@ -106,10 +106,15 @@ is_receiver_channel?(c: CHANNEL): BOOLEAN =
 
 %=== Time --------------------------------------------------------===
 
-% Time is modeled by non-negative integers
-% -1 is reserved as an invalid time
-% -2 is reserved as an atomic "out-of-band" time
-TIME: TYPE = [-2..5];  % { t: INTEGER | t >= -2 };
+% Time is modeled by real numbers, where
+%
+%   -1 is reserved as an invalid time
+%   -2 is reserved as an atomic "out-of-band" time
+%
+% Times which appear as event times on the calendar are restriced to the set
+% {-2} U {-1} U { t >= 0 }.
+%
+TIME: TYPE = { t: REAL | t >= -2 };
 invalid_time: TIME = -1;
 atomic_time: TIME = -2;
 msg_delay: TIME = 1;
@@ -907,12 +912,20 @@ mfa(f: FAULTS): BOOLEAN =
 % There is at most 1 faulty node and it is not the source node
 %
 vfa(f: FAULTS): BOOLEAN =
-  mfa(f) AND NOT is_faulty?(f[source_id]);
+      mfa(f)
+  AND NOT is_faulty?(f[source_id]);
 
 
 %%%  Basic Invariants
 
-global_time_not_null(t: TIME): BOOLEAN = t /= -1;
+global_time_not_null(t: TIME): BOOLEAN =
+  t >= 0 OR t = -2;
+
+valid_cal_times(cal: CALENDAR): BOOLEAN =
+  FORALL (c: CHANNEL):
+       cal.time[c] = atomic_time
+    OR cal.time[c] = invalid_time
+    OR cal.time[c] >= 0;
 
 % All event times listed on the calendar are either in the (weak) future, or
 % are "atomic times".
@@ -936,6 +949,7 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
 %
 cal_invt: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
+    AND valid_cal_times(cal)
     AND global_time_not_null(t)
     AND missing_cal(cal)
     AND unique_atomic(cal)
