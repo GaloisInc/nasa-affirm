@@ -176,12 +176,20 @@ function cmd {
         local salcmd=${lines[$i]/sal-inf-bmc/sal-inf-bmc $SALOPT}
         # replace SAL file name with the base name followed by any parameters
         if [ -n "${SAL_PARAMS}" ]; then
-            salcmd=$(echo $salcmd | \
+            salcmd_params=$(echo $salcmd | \
                 sed "s/\(${SALFILE%.sal}\)\(.sal\)\?/\1${SAL_PARAMS}/")
+            # For printing the proof command to the console, we quote the
+            # SAL context + parameters so they can easily by copy/pasted at
+            # the command line and be valid shell commands.
+            salcmd_quoted=$(echo $salcmd | \
+                sed "s/\(${SALFILE%.sal}\)\(.sal\)\?/'\1${SAL_PARAMS}'/")
+        else
+            salcmd_params="$salcmd"
+            salcmd_quoted="$salcmd"
         fi
-        printf "[proving]: %s\n" "$salcmd"
+        printf "[proving]: %s\n" "$salcmd_quoted"
         local tmp=$(mktemp runproof.XXXXXXXX -ut)
-        exec $salcmd 2>&1 |\
+        exec $salcmd_params 2>&1 |\
             tee $tmp |\
             awk '/(failed|Error|induction rule failed)/ \
                      {print "'$CS'" $0 "'$CE'"} \
