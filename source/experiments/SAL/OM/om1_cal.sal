@@ -210,7 +210,7 @@ msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
     % manifest case: return a manifestly faulty value
     bad_msg
   ELSE
-    % non-faulty case: return intended message
+    % non-faulty (or symmetric source) case: return intended message
     cal.msg[chan(i,j)]
   ENDIF;
 
@@ -994,12 +994,25 @@ manifest_source: LEMMA system_obs |-
       FORALL (i: RELAYS): latches[i] = missing OR latches[i] = bad_msg);
 
 
-% manifest_relays - when a relay is manifestly faulty, receivers will only get
+% symmetric_relay - when a relay has a symmetric fault, then the message it
+% sends to the receiver is determined completly by the relay and receiver id.
+%
+% Proved
+% sal-inf-bmc -i -d 1 -l abstract_all om1_cal symmetric_relay
+symmetric_relay: LEMMA system_obs |-
+  G(FORALL (i: RELAYS): f[i] = symmetric =>
+      FORALL (r: RECEIVERS):
+        (   buffers[r][i] = missing
+         OR buffers[r][i] = uninterp_msg(i, r))
+   );
+
+
+% manifest_relay - when a relay is manifestly faulty, receivers will only get
 % 'bad_msg' from it.
 %
 % Proved
-% sal-inf-bmc -i -d 1 -l abstract_all om1_cal manifest_relays
-manifest_relays: LEMMA system_obs |-
+% sal-inf-bmc -i -d 1 -l abstract_all om1_cal manifest_relay
+manifest_relay: LEMMA system_obs |-
   G(FORALL (i: RELAYS): f[i] = manifest =>
       FORALL (r: RECEIVERS):
         buffers[r][i] = missing OR buffers[r][i] = bad_msg);
@@ -1190,8 +1203,14 @@ validity: THEOREM system_obs |- G(vfa(f) => v_ok);
 % sal-inf-bmc -i -d 1 \
 %     -l abstract_all -l cal_invt -l fault_propagation \
 %     -l receiver_mode_invt -l majority_vote_invt -l exists_majority \
-%     -l manifest_relays \
+%     -l manifest_relay -l symmetric_relay \
 %     om1_cal agreement
+%
+% Stats for num_relays=4, num_recvs=4:
+%
+%   * 229 s to prove (2.0 Ghz Intel Xeon E312xx)
+%   * number of system variables: 129, number of auxiliary variables: 0
+%   * Yices file size: 16.6 MB
 %
 agreement: THEOREM system_obs |- G(mfa(f) => a_ok);
 
