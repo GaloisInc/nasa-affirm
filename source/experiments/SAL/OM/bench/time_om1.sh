@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
+#
+# Results may be extracted from the .logs/<start_time> directory
+# by running:
+#
+#   % egrep -E -h '^.*RESULT' * | sed 's/^.*RESULT //'
 
 set -o pipefail
 
 ###  PARAMETERS  ###########################################
 
+# A larger number of parameter configurations with varying total
+# number of nodes.
 mixed_params=(\
     "1,1" \
     "2,1" "1,2" \
@@ -13,23 +20,29 @@ mixed_params=(\
     "6,1" "5,2" "4,3" "3,4" "2,5" "1,6" \
     "7,1" "6,2" "5,3" "4,4" "3,5" "2,6" "1,7" \
     "8,1" "7,2" "6,3" "5,4" "4,5" "3,6" "2,7" "1,8" \
-    "9,1" "8,2" "7,3" "6,4" "5,5" "4,6" "3,7" "2,8" "1,9"\
+    "9,1" "8,2" "7,3" "6,4" "5,5" "4,6" "3,7" "2,8" "1,9" \
+    "10,1" "9,2" "8,3" "7,4" "6,5" "5,6" "4,7" "3,8" "2,9" "1,10" \
 )
 
+# Small parameters, mostly for testing the benchmark script
 small_params=(\
     "1,1" \
     "2,1" "1,2" \
     "3,1" "2,2" "1,3" \
 )
 
+# Parameters for OM(1) with different numbers of generals
 diag_params=("1,1" "2,2" "3,3" "4,4" "5,5" "6,6" "7,7" "8,8" "9,9" "10,10")
+
+
+###  EDIT ME  ##############################################
 
 # Specify which parameter set to use
 param_set="${mixed_params[@]}"
 
 # Specify how many concurrent jobs to run
 CONCURRENT_LIMIT=${CONCURRENT_LIMIT:-8}
-export CONCURRENT_LIMIT
+export CONCURRENT_LIMIT  # exported for concurrent.lib.sh
 
 # specify timeout
 TIME_LIMIT=${TIME_LIMIT:-"1h"}
