@@ -10,7 +10,8 @@
 %   * attempted to minimize number of state vars
 %   * all nodes in 'system' are composed asynchronously
 %   * main properties are specified using synchronous observer 'observer'
-%   * byzantine faults are modeled through the message-read mechanism
+%   * hybrid fault model is implemented through the message-read mechanism
+%     and constraints at the LTL level
 %
 % Authors: Benjamin F Jones <bjones@galois.com>, Galois Inc. (2016)
 %          Lee Pike                            , Galois Inc. (2016)
