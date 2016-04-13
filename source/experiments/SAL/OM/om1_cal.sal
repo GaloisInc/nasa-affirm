@@ -106,10 +106,15 @@ is_receiver_channel?(c: CHANNEL): BOOLEAN =
 
 %=== Time --------------------------------------------------------===
 
-% Time is modeled by non-negative integers
-% -1 is reserved as an invalid time
-% -2 is reserved as an atomic "out-of-band" time
-TIME: TYPE = [-2..5];  % { t: INTEGER | t >= -2 };
+% Time is modeled by real numbers, where
+%
+%   -1 is reserved as an invalid time
+%   -2 is reserved as an atomic "out-of-band" time
+%
+% Times which appear as event times on the calendar are restriced to the set
+% {-2} U {-1} U { t >= 0 }.
+%
+TIME: TYPE = { t: REAL | t >= -2 };
 invalid_time: TIME = -1;
 atomic_time: TIME = -2;
 msg_delay: TIME = 1;
@@ -202,7 +207,7 @@ empty_calendar: CALENDAR =
 
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
-  IF f[i] = byzantine OR (f[i] = symmetric AND i /= source_id) THEN
+  IF f[i] = byzantine OR f[i] = symmetric THEN
     % The symmetric case is further constrained below, see 'mfa'.
     % Note: the case of a source with symmetric fault is equivalent to
     % the non-faulty case.
@@ -453,18 +458,6 @@ TRANSITION
         counter' = 0;
         ix' = 1;
         pc' = pc + 1
-    % []
-    %   % To compute "hybrid majority vote", we skip over buffer elements that are
-    %   % manifestly faulty (bad_msg). See also the definition of
-    %   % 'has_majority?'.
-    %   receiver_vote_loop:
-    %       mode = voting
-    %   AND pc > 0
-    %   AND relay_id(1) <= ix AND ix <= relay_id(num_relays)
-    %   AND i_am_atomic?(cal, p, t)
-    %   AND buffer[ix] = bad_msg -->
-    %     ix' = ix + 1;
-    %     pc' = pc + 1;
     []
       % Process a normal buffer elements
       receiver_vote_loop:
@@ -907,12 +900,20 @@ mfa(f: FAULTS): BOOLEAN =
 % There is at most 1 faulty node and it is not the source node
 %
 vfa(f: FAULTS): BOOLEAN =
-  mfa(f) AND NOT is_faulty?(f[source_id]);
+      mfa(f)
+  AND NOT is_faulty?(f[source_id]);
 
 
 %%%  Basic Invariants
 
-global_time_not_null(t: TIME): BOOLEAN = t /= -1;
+global_time_not_null(t: TIME): BOOLEAN =
+  t >= 0 OR t = -2;
+
+valid_cal_times(cal: CALENDAR): BOOLEAN =
+  FORALL (c: CHANNEL):
+       cal.time[c] = atomic_time
+    OR cal.time[c] = invalid_time
+    OR cal.time[c] >= 0;
 
 % All event times listed on the calendar are either in the (weak) future, or
 % are "atomic times".
@@ -936,6 +937,7 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
 %
 cal_invt: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
+    AND valid_cal_times(cal)
     AND global_time_not_null(t)
     AND missing_cal(cal)
     AND unique_atomic(cal)
@@ -943,7 +945,6 @@ cal_invt: LEMMA system_obs |-
 
 
 % lemma_relays - needed to prove 'abstract_invt'
-% TODO move this into the state abstraction
 %
 % Proved:
 % sal-inf-bmc -i  -d 1 -l cal_invt om1_cal lemma_relays
@@ -1079,21 +1080,12 @@ receiver_mode_invt: LEMMA system_obs |-
           OR (    mode[r] = voting
               AND counters[r] = 0
               AND ixs[r] = 1
-              AND pc[r] = 0
+              AND (pc[r] = 0 OR pc[r] = 1)
               AND buffer_size[r] = num_relays
               AND candidate[r] = missing
               AND FORALL (i: RELAYS): buffers[r][i] /= missing
              )
              % receiver starts voting by initializing state variables
-          OR (    mode[r] = voting
-              AND counters[r] = 0
-              AND ixs[r] = 1
-              AND pc[r] = 1
-              AND buffer_size[r] = num_relays
-              AND candidate[r] = missing
-              AND FORALL (i: RELAYS): buffers[r][i] /= missing
-             )
-             % receiver is in the process of tallying vote
           OR (    mode[r] = voting
               AND counters[r] <= cntBuf(relay_id(1), ixs[r]-1,
                                         buffers[r], candidate[r])

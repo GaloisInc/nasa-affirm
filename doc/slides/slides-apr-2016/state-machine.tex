@@ -1,0 +1,29 @@
+\documentclass{article}
+
+\usepackage{pgf}
+\usepackage{tikz}
+\usetikzlibrary{arrows,automata}
+\usepackage[latin1]{inputenc}
+\usepackage{verbatim}
+
+\begin{document}
+
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
+                    semithick]
+  \tikzstyle{every state}=[fill=red,draw=none,text=white]
+
+  \node[initial,state] (A1)                  {$a_1$};
+  \node[state]         (A2)  [right of=A1]   {$a_2$};
+  \node[state]         (A3)  [right of=A2]   {$a_3$};
+  \node[state]         (A3b) [right of=A3]   {$a_{3b}$};
+  \node[state]         (A4)  [right of=A3b]  {$a_4$};
+  \node[final,state]   (A5)  [right of A4]   {$a_4$};
+
+  \path (A1) edge node {0,1,L} (A2)
+        (A2) edge node {1,1,L} (A3)
+        (A3) edge node {0,1,L} (A3b)
+        (A3b) edge node {1,1,R} (A4)
+        (A4) edge node {1,0,R} (A5);
+\end{tikzpicture}
+
+\end{document}
