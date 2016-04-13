@@ -9,6 +9,7 @@
  * Inductive proof of agreement
  * Hybrid fault model
  * Benchmarking against Rushby's OM(1)
+ * Experiments with automated lemma generation
 
 
 # Inductive proof of agreement
@@ -116,7 +117,10 @@ and receivers.
 
 ![](benchmark.png)
 
-# Automated Lemma Generation
+
+# Experiments with automated lemma generation
+
+## Automated Lemma Generation
 
 * Experiments with Rockwell Collins using JKind
 
