@@ -116,3 +116,12 @@ and receivers.
 
 ![](benchmark.png)
 
+# Automated Lemma Generation
+
+* Experiments with Rockwell Collins using JKind
+
+* Reimplemented physical-layer protocol proofs (8N1, Biphase Mark)
+
+* Implements *IC3 Modulo Theories via Implicit Predicate Abstraction* (http://arxiv.org/pdf/1310.6847.pdf), k-induction
+
+* Upshot: lemma generation only works for fixed constants, not uninterpreted constants.
