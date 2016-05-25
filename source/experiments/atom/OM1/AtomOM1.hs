@@ -2,6 +2,7 @@ module AtomOM1
   ( compileOM1 )
 where
 
+import Data.Word
 import Language.Atom
 
 
@@ -15,10 +16,12 @@ observerPeriod = 20
 
 type MsgType = Word64
 
+-- | Special message type value indicating "no message present"
 missingMsgValue :: MsgType
 missingMsgValue = 0
 
-msgVar :: Name -> MsgType -> Atom (V MsgType)
+-- | Delcare a local variable of message type
+msgVar :: Name -> Atom (V MsgType)
 msgVar = flip word64 missingMsgValue
 
 
@@ -26,28 +29,31 @@ msgVar = flip word64 missingMsgValue
 
 om1 :: Atom ()
 om1 = do
+
+  -- setup channels for communication bewteen source, relays, and receivers
   c1v <- msgVar "c1v"
   c1 <- vchannel c1v  -- :: VChannel MsgType
 
-  source c1
+  atom "source" $ source c1
 
-  observer c1
+  atom "observer" $ observer c1
 
 
 source :: VChannel MsgType -> Atom ()
-source c1 = atom "source" $ do
+source c1 = do
   done <- bool "done" False
-  msg  <- msgVar "msg" 1
+  msg  <- msgVar "msg"
+  msg  <== 1
   period sourcePeriod $ do
     cond $ not_ (value done)
     updateVChannel c1 (value msg)
-    done <== True
+    done <== Const True
 
 
 observer :: VChannel MsgType -> Atom ()
-  observer c1 = period observerPeriod $ atom "observer" $ do
-    v <- readVChannel c1  -- disruptive
-    probe "c1" v
+observer c1 = period observerPeriod $ do
+  v <- readVChannel c1  -- disruptive read
+  printIntegralE "v = " v
 
 
 -- Variable Channels ---------------------------------------------------
@@ -61,10 +67,10 @@ writeVChannel :: VChannel a -> Atom ()
 writeVChannel = writeChannel
 
 readVChannel :: VChannel a -> Atom (E a)
-readVChannel = value <$> readChannel c
+readVChannel c = value <$> readChannel c
 
-updateVChannel :: VChannel a -> E a -> Atom ()
-updateVChannel (VChannel var _) expr = do
+updateVChannel :: Assign a => VChannel a -> E a -> Atom ()
+updateVChannel (Channel var _) expr = do
   var <== expr
 
 
@@ -74,9 +80,8 @@ updateVChannel (VChannel var _) expr = do
 -- Also print out info on the generated schedule.
 compileOM1 :: IO ()
 compileOM1 = do
-  (devSched, _, _, _, _) <- compile "om1" cfg om1
-  putStrLn $ reportSchedule devSched
-  putStrLn $ reportSchedule dvrSched
+  (sched, _, _, _, _) <- compile "om1" cfg om1
+  putStrLn $ reportSchedule sched
   where
     cfg = defaults { cCode = prePostCode }
 

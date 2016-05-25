@@ -1,18 +1,14 @@
 name:                atom-om1
 version:             0.1.0.0
 synopsis:            OM1 in atom
-license:             MIT
-license-file:        LICENSE
 author:              Benjamin Jones
 maintainer:          bjones@galois.com
 category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
 
--- extra-source-files:  generated/.c
---                    , generated/fibDev.h
---                    , generated/fibDrv.c
---                    , generated/fibDrv.h
+extra-source-files:  generated/om1.h
+                   , generated/om1.c
 
 executable atom-om1
   main-is:             Main.hs

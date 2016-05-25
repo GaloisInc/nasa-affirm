@@ -1,6 +1,6 @@
 module Main where
 
-import AtomFib
+import AtomOM1
 
 main :: IO ()
-main = compileFib
+main = compileOM1
