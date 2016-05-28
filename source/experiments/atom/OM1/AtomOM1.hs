@@ -8,8 +8,9 @@ import Language.Atom
 
 -- Parameters ----------------------------------------------------------
 
+initPeriod = 100
 sourcePeriod = 20
-observerPeriod = 20
+observerPeriod = 5
 
 
 -- Messages ------------------------------------------------------------
@@ -31,30 +32,38 @@ om1 :: Atom ()
 om1 = do
 
   -- setup channels for communication bewteen source, relays, and receivers
-  c1v <- msgVar "c1v"
-  c1 <- vchannel c1v  -- :: VChannel MsgType
+  c1 <- msgVar "c1"
+  probe "c1 value" (value c1)
 
+  -- print initial probe values
+  atom "init" $ do
+    done <- bool "done" False
+    period initPeriod $ do
+      cond $ not_ (value done)
+      printStrLn "Initial probe values:"
+      ps <- probes
+      mapM_ printProbe ps
+      done <== Const True
+
+  -- Setup nodes
   atom "source" $ source c1
+  atom "observer" $ observer
 
-  atom "observer" $ observer c1
 
-
-source :: VChannel MsgType -> Atom ()
+source :: V MsgType -> Atom ()
 source c1 = do
   done <- bool "done" False
-  msg  <- msgVar "msg"
-  msg  <== 1
+  let source_msg = Const 1 :: E Word64
+
   period sourcePeriod $ do
     cond $ not_ (value done)
-    updateVChannel c1 (value msg)
-    writeVChannel c1
+    c1 <== source_msg
     done <== Const True
 
-
-observer :: VChannel MsgType -> Atom ()
-observer c1 = period observerPeriod $ do
-  v <- obsVChannel c1  -- non-disruptive read
-  printIntegralE "v = " v
+observer :: Atom ()
+observer = period observerPeriod $ exactPhase 0 $ do
+  ps <- probes
+  mapM_ printProbe ps
 
 
 -- Variable Channels ---------------------------------------------------
