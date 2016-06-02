@@ -8,3 +8,6 @@ improvements-to-om1.pdf: improvements-to-om1.md state-machine.pdf
 state-machine.pdf: state-machine.tex
 	pdflatex $<
 
+.PHONY: clean
+clean:
+	rm -rf improvements-to-om1.pdf
