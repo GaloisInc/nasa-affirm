@@ -10,6 +10,8 @@ import Language.Atom
 
 -- Parameters ----------------------------------------------------------
 
+goodMsg = Const 1 :: E Word64
+
 -- Time in ticks between each node's activity
 initPeriod     = 100
 sourcePeriod   = 20
@@ -66,7 +68,7 @@ source :: [V MsgType]  -- ^ output channels
 source cs = period sourcePeriod
           . atom "source" $ do
   done <- bool "done" False
-  let source_msg = Const 1 :: E Word64
+  let source_msg = goodMsg
 
   atom "source_poll" $ do
     cond $ not_ (value done)
