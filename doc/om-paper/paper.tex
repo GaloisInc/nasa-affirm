@@ -1,0 +1,121 @@
+\documentclass{IEEEtran/IEEEtran}
+
+\usepackage{ifthen}
+\usepackage{xcolor}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+
+\newtheorem{definition}{Definition}
+
+\newboolean{submission}  %set to true for the submission version
+\setboolean{submission}{false}
+%\setboolean{submission}{true}
+\ifthenelse
+{\boolean{submission}}
+{ %
+  \newcommand{\lee}[1]{ } %
+  \newcommand{\ben}[1]{ } %
+  % Put your own TODO macros here and below
+} %hide todo
+{ %
+  \newcommand{\lee}[1]{ {\color{blue}$<$lee: #1$>$} } %
+  \newcommand{\ben}[1]{ {\color{purple}$<$ben: #1$>$} } %
+  \usepackage{hyperref} %
+  \usepackage[inline]{showlabels} %
+}
+
+
+\begin{document}
+
+\title{Towards Systematic Specification and Verification of Fault-Tolerant Protocols}
+\author{Ben and Lee}
+
+
+\maketitle
+
+
+\begin{abstract}
+  Some abstract.
+\end{abstract}
+
+\section{Introduction}
+
+Fault-tolerant distributed systems are essential to life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
+
+There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Some of this work uses mechanical theorem-proving~\cite{}. Two problems with mechanical verification are that it requires specialized expertise and it is labor intensive. In contrast, model-checking is automated but has limited scalability. To address scalability, abstractions and optimizations are employed, both of which lead to problems. Verification abstractions are often ad-hoc and system-specific. For example, to model a node that can broadcast the values $\{0, 1\}$, or no value if when faulty, one might define an enumerated type of broadcast values sent such as
+
+$$\{0, 1, NONE\}$$
+
+However, the enumeration conflates environment artifacts (i.e., faults) and system artifacts. Conflating them makes formal model-to-code correspondence more difficult to achieve. An example of a verification optimization is to model message passing as shared state between nodes. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
+
+\paragraph{Contributions}
+
+Our work combines a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems.
+
+We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutetre and Sorea~\cite{}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}. Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
+
+The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to impose fault model constraints on the system. Doing so makes the fault-model compositional with the system and easy to modify. We also use synchronous observers to observe safety properties, eliding the need for complex linear temporal logic specifications. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
+
+We demonstrate the model with an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between nodes---it is the most scalable model-checking verification of the protocol.
+
+\lee{finish intro...}
+
+ %% Timed automata are an alternative to the \emph{timed automata} formalism~\cite{}, as implemented in model-checkers like UPPAAL~\cite{} and Kronos~\cite{}.
+
+
+% ------------------------------------------------------------
+\section{Formal Model}\label{sec:model}
+Here we describe our formal model specialized for fault-tolerant distributed systems. There are three principal abstractions we describe: calendar automata, synchronous observers, and abstract state machines; we describe each below.
+
+\subsection{Calendar Automata}\label{sec:calendar}
+\emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{}. Time automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks} in a solver. While successful timed automata model-checkers exist, they are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks. Modern general-purpose model-checkers like \lee{name some} use SMT solvers for general infinite-state system verification that is not limited to real-time clocks.
+
+However, real-time system verification in general-purpose model-checkers requires an explicit formalism of real-time progression. Trying to encode real-time clocks directly is difficult; in particular, one must avoid Zeno's paradox in which no progress is made because state transitions simply update real-valued variables by an infinitesimally small amount~\cite{bruno,lamport}. To avoid this problem, Dutetre and Sorea developed \emph{calendar automata}~\cite{bruno}, which is itself inspired by event calendars used in discrete-event simulation.
+
+Calendar automata avoid the problems of encoding timed automata. Rather than encoding ``how much time has passed since the last event'', it encodes ``how far into the future is the next scheduled event'', and a real-valued variable representing the current time is updated to the next event time. Doing so avoids Zeno updates.
+
+
+Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. We do not define events; intuitively, an event is a set of state variables. When an event is \emph{enabled}, the transitions over events are enabled; otherwise, the variables stutter and maintain the same value.
+
+\begin{definition}[Event Calendar and Calender Events]
+An \emph{event calendar} $\{ <e_0, t_0>, <e_1, t_1>, \ldots, <e_n, t_n> \}$ is a finite set of ordered pairs $<e_i, t_i>$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathcal{R}$ is the time at which the event is scheduled.
+\end{definition}
+
+For an event calendar $c$, $c_i \in c = <e_i, t_i>$. Define an ordering on event calendars such that $<e_i, t_i> \leq <e_j, t_j>$ iff $t_i \leq t_j>$, and $min(c) = \{ c_i \| \forall c_j \in c, \, c_i \leq c_j  \}$ are the minimum elements of $c$.
+
+Let a transition system $\mathcal{M} = <S, I, \rightarrow>$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that a state $\sigma \in S$ is a total function that maps state variables to values.
+
+We distinguish two special state variables: (1) $now \in \mathcal{R}$ denotes the current time in the state, and (2) $c$ is an event calendar.
+
+The following laws must hold of a calendar automaton:
+
+\begin{itemize}
+\item Time is initialized to 0 in the initial state: $\forall \sigma \in I$, $\sigma(now) = 0$.
+\item In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S, \, <e_i, t_i> \in C$, $\sigma(t_i) /geq \sigma(now)$.
+\item In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S \, <e_i, t_i> \in C$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma \backslash now = min$
+\end{itemize}
+
+\emph{give theorems for calendar, describe calendar for messages---all you need}
+
+\subsection{Synchronous Observers}\label{sec:sync}
+
+\paragraph{Fault model}
+
+\paragraph{Property Observer}
+
+\subsection{Abstract State Machines}\label{sec:abstract}
+
+
+% ------------------------------------------------------------
+\section{Experimental Results}\label{sec:experimental}
+
+\subsection{Byzantine Agreement}\label{sec:byz}
+
+
+% ------------------------------------------------------------
+\section{Conclusions}\label{sec:conclusions}
+
+
+\end{document}
