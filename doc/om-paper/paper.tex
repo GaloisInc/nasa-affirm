@@ -54,7 +54,7 @@ However, the enumeration conflates environment artifacts (i.e., faults) and syst
 
 Our work combines a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems.
 
-We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutetre and Sorea~\cite{}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}. Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
+We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{Dutertre-Sorea}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
 
 The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to impose fault model constraints on the system. Doing so makes the fault-model compositional with the system and easy to modify. We also use synchronous observers to observe safety properties, eliding the need for complex linear temporal logic specifications. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
 
@@ -112,5 +112,7 @@ The following laws must hold of a transition system $\mathcal{M}$ implementing a
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
 
+\bibliographystyle{IEEEtran}
+\bibliography{paper}
 
 \end{document}
