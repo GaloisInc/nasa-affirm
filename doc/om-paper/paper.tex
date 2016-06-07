@@ -76,25 +76,20 @@ However, real-time system verification in general-purpose model-checkers require
 
 Calendar automata avoid the problems of encoding timed automata. Rather than encoding ``how much time has passed since the last event'', it encodes ``how far into the future is the next scheduled event'', and a real-valued variable representing the current time is updated to the next event time. Doing so avoids Zeno updates.
 
-
 Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. We do not define events; intuitively, an event is a set of state variables. When an event is \emph{enabled}, the transitions over events are enabled; otherwise, the variables stutter and maintain the same value.
 
-\begin{definition}[Event Calendar and Calender Events]
-An \emph{event calendar} $\{ <e_0, t_0>, <e_1, t_1>, \ldots, <e_n, t_n> \}$ is a finite set of ordered pairs $<e_i, t_i>$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathcal{R}$ is the time at which the event is scheduled.
-\end{definition}
+An \emph{event calendar} $\{ (e_0, t_0), (e_1, t_1), \ldots, (e_n, t_n) \}$ is a finite set of ordered pairs $(e_i, t_i)$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathcal{R}$ is a \emph{timeout}, the time at which the event is scheduled. We denote element $(e_1, t_1)$ of an event calendar by $c_i$.
 
-For an event calendar $c$, $c_i \in c = <e_i, t_i>$. Define an ordering on event calendars such that $<e_i, t_i> \leq <e_j, t_j>$ iff $t_i \leq t_j>$, and $min(c) = \{ c_i \| \forall c_j \in c, \, c_i \leq c_j  \}$ are the minimum elements of $c$.
+Let $c$ be an event calendar and $c_i, c_j \in c$ be calendar events. Define an ordering on event calendars such that $c_i \leq c_j$ iff $t_i \leq t_j$, and $min(c) = \{ c_i | \forall c_j \in c, \, c_i \leq c_j  \}$ are the minimum elements of $c$.
 
-Let a transition system $\mathcal{M} = <S, I, \rightarrow>$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that a state $\sigma \in S$ is a total function that maps state variables to values.
+Let a transition system $\mathcal{M} = (S, I, \rightarrow)$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that a state $\sigma \in S$ is a total function that maps state variables to values. We distinguish two special state variables in a transition system: (1) $now \in \mathcal{R}$ denotes the current time in the state, and (2) $c$ is an event calendar.
 
-We distinguish two special state variables: (1) $now \in \mathcal{R}$ denotes the current time in the state, and (2) $c$ is an event calendar.
-
-The following laws must hold of a calendar automaton:
+The following laws must hold of a transition system $\mathcal{M}$ implementing a calendar automaton:
 
 \begin{itemize}
-\item Time is initialized to 0 in the initial state: $\forall \sigma \in I$, $\sigma(now) = 0$.
-\item In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S, \, <e_i, t_i> \in C$, $\sigma(t_i) /geq \sigma(now)$.
-\item In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S \, <e_i, t_i> \in C$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma \backslash now = min$
+\item Time is initialized to be less than or equal to every calendar timeout: $\forall \sigma \in I, \, \forall (e_i, t_i) \in \sigma(c)$, $\sigma(now) \leq t_i$.
+\item In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S \, \forall (e_i, t_i) \in \sigma(c)$, $t_i \geq \sigma(now)$.
+\item In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S \, \forall (e_i, t_i) \in \sigma(c)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := min(c)]$.
 \end{itemize}
 
 \emph{give theorems for calendar, describe calendar for messages---all you need}
