@@ -1,0 +1,262 @@
+-- smp3.lus
+--
+-- A model of smp3.sal in Lustre: simple msg_t passing with 3 nodes
+--
+
+type msg_t  = enum { Missing, Good, Bad };
+type time_t = int;
+
+const TIME_DELTA   : time_t = 1;
+const INVALID_TIME : time_t = -1;
+
+-- inputs:  af, bf, cf: fault flags for nodes A, B, C
+-- returns: mA, mB, mC: msg_ts stored by nodes A, B, C
+node    main (faults: bool[3])
+     returns ();
+var
+    -- properties
+    p: bool;
+    q: bool;
+    r: bool;
+    s: bool;
+
+    -- calendar entry for channel A -> B
+    cm: msg_t[2];
+    ct: time_t[2];
+
+    -- node outputs
+    outmA, outmB, outmC : msg_t;
+    outtA, outtB, outtC : time_t;
+
+    -- node latches
+    mA, mB, mC : msg_t;
+
+    -- read/write flags (pulse on event)
+    readA, writeA: bool;
+    readB, writeB: bool;
+    readC, writeC: bool;
+
+    -- global time
+    time : time_t;
+let
+
+    -------------------------------------------------------------
+    --  PROPERTIES TO VERIFY
+    -------------------------------------------------------------
+
+    --%MAIN
+    assert     faults[0];
+    assert not faults[1];
+    assert not faults[2];
+
+    --%PROPERTY p;
+    p = (time < 2 and mC = Missing) or (time = 2 and mC = Good);
+    --%PROPERTY q;
+    q = mC <> Bad;
+    --%PROPERTY r;
+    r = cm[0] = Missing;
+    --%PROPERTY s;
+    --s = cm[0] <> Missing;
+    s = time = 0;
+
+
+    -- time = 0 -> next_time(pre(time), ct);
+    time = 0 -> if min_time(ct) <> INVALID_TIME
+                then min_time(ct)
+                else pre(time);
+
+    -- outmX  : output event message for node X
+    -- outtX  : output event time for node X
+    -- readX  : read from calendar event for node X (pulse)
+    -- writeX : write to calendar event for node X (pulse)
+    -- mX     : message latch for node X
+    (outmA, outtA, readA, writeA, mA) = nodeA(faults[0], time);
+    (outmB, outtB, readB, writeB, mB) = nodeB(faults[1], time, cm[0], ct[0]);
+    (outmC, outtC, readC, writeC, mC) = nodeC(faults[2], time, cm[1], ct[1]);
+
+    -- map node outputs to the calendar
+    -- 1) check if node A wants to write to calendar and do so
+    -- 2) else, check if B has read and clear the calendar if so
+    -- 3) else leave value is not changed
+    cm = [Missing,Missing] -> [ if writeA
+                                then outmA
+                                else if readB
+                                     then Missing
+                                     else (pre cm)[0]
+                              , if writeB
+                                then outmB
+                                else if readC
+                                     then Missing
+                                     else (pre cm)[1]
+                              ];
+
+    ct = [INVALID_TIME,INVALID_TIME] -> [ if writeA
+                                          then outtA
+                                          else if readB
+                                               then INVALID_TIME
+                                               else (pre ct)[0]
+                                        , if writeB
+                                          then outtB
+                                          else if readC
+                                               then INVALID_TIME
+                                               else (pre ct)[1]
+                                        ];
+
+tel;
+
+
+-- NODE A ------------------------------------------------------------------
+
+-- node A sends a message to node B
+node   nodeA (f: bool; time: time_t)
+     returns (outm: msg_t; outt: time_t; read: bool; write: bool; m: msg_t);
+var
+    go: bool;
+    fm: msg_t;
+    ap: bool;
+let
+    --%PROPERTY ap;
+    ap = go;
+    go = time = 0;
+    m  = Missing -> if go
+                    then Good
+                    else (pre m);
+    fm = if not f then m else Bad;     -- fault model
+
+    -- write channel A -> B
+    outm  = Missing      -> if go
+                            then fm
+                            else (pre outm);
+    outt  = INVALID_TIME -> if go
+                            then time + TIME_DELTA
+                            else (pre outt);
+    read  = false;
+    write = riseb(go);
+tel;
+
+
+-- NODE B ------------------------------------------------------------------
+
+-- node B receives a message from node A and sends a message to node C
+node   nodeB (f: bool; time: time_t; cm: msg_t; ct: time_t)
+     returns (outm: msg_t; outt: time_t; read: bool; write: bool; m: msg_t);
+var
+    go: bool;
+    fm: msg_t;  -- fault model message
+let
+    go = (ct = time) and (cm <> Missing);
+
+    -- read channel A -> B
+    m  = Missing -> if go
+                    then cm
+                    else (pre m);
+    fm = if not f then m else Bad;  -- fault model
+
+    -- read channel A -> B
+    read  = riseb(go);  -- generate pulse on rising edge of 'go'
+
+    -- write channel B -> C
+    outm  = Missing      -> if go
+                            then fm
+                            else (pre outm);
+    outt  = INVALID_TIME -> if go
+                            then time + TIME_DELTA
+                            else (pre outt);
+    write = riseb(go);
+tel;
+
+
+-- NODE C ------------------------------------------------------------------
+
+node   nodeC (f: bool; time: time_t; cm: msg_t; ct: time_t)
+     returns (outm: msg_t; outt: time_t; read: bool; write: bool; m: msg_t);
+var
+    go: bool;
+let
+    go = (ct = time) and (cm <> Missing);
+
+    -- read channel B -> C
+    m  = Missing -> if go
+                    then cm
+                    else (pre m);
+    read  = riseb(go);
+
+    -- no writes
+    outm  = Missing;
+    outt  = INVALID_TIME;
+    write = false;
+tel;
+
+
+-- Helper nodes ---------------------------------------------
+
+-- assume: time >= 0
+node next_time (time: time_t; ct: time_t[2])
+     returns   (ntime: time_t);
+var
+    mtime: time_t;
+let
+    mtime = min_time(ct);
+    ntime = if time = ct[0] or time = ct[1] or mtime = INVALID_TIME
+            then time
+            else mtime;
+tel;
+
+-- assume: either ct[i] >= 0 or ct[i] == INVALID_TIME
+-- returns: minimum of input times among those that are positive
+--          otherwise INVALID_TIME
+node min_time (ct: time_t[2])
+     returns  (mtime: time_t);
+var
+    p0, p1 : bool;
+let
+    p0 = ct[0] >= 0;
+    p1 = ct[1] >= 0;
+    mtime = if p0 and p1
+            then (if ct[0] <= ct[1]
+                  then ct[0]
+                  else ct[1])
+            else if p0
+                 then ct[0]
+                 else ct[1];
+tel;
+
+-- rising edge on a message signal
+node risem   (m: msg_t)
+     returns (rose: bool);
+let
+    rose = false -> if (pre m = Missing) and (m <> Missing)
+                    then true
+                    else false;
+tel;
+
+-- rising edge on a time signal
+node riset   (t: time_t)
+     returns (rose: bool);
+let
+    rose = false -> if (pre t = INVALID_TIME) and (t >= 0)
+                    then true
+                    else false;
+tel;
+
+-- falling edge on a time signal
+node fallt   (t: time_t)
+     returns (fell: bool);
+let
+    fell = false -> if (pre(t) >= 0) and (t = INVALID_TIME)
+                    then true
+                    else false;
+tel;
+
+-- rising edge on a boolean signal
+--
+--    __---_
+--    __-___
+--
+node riseb   (b: bool)
+     returns (rose: bool);
+let
+    rose = false -> if b and (not pre b)
+                    then true
+                    else false;
+tel;
