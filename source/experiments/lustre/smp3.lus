@@ -11,14 +11,11 @@ const INVALID_TIME : time_t = -1;
 
 -- inputs:  af, bf, cf: fault flags for nodes A, B, C
 -- returns: mA, mB, mC: msg_ts stored by nodes A, B, C
-node    main (faults: bool[3])
-     returns ();
+node    main (faults: bool[3]) returns ();
 var
     -- properties
     p: bool;
-    q: bool;
-    r: bool;
-    s: bool;
+    c: int;
 
     -- calendar entry for channel A -> B
     cm: msg_t[2];
@@ -45,25 +42,20 @@ let
     -------------------------------------------------------------
 
     --%MAIN
-    assert     faults[0];
+    assert not faults[0];
     assert not faults[1];
     assert not faults[2];
 
     --%PROPERTY p;
-    p = (time < 2 and mC = Missing) or (time = 2 and mC = Good);
-    --%PROPERTY q;
-    q = mC <> Bad;
-    --%PROPERTY r;
-    r = cm[0] = Missing;
-    --%PROPERTY s;
-    --s = cm[0] <> Missing;
-    s = time = 0;
+    -- p = (time < 2 and mC = Missing) or (time = 2 and mC = Good);
+    -- p = not writeA;
+    p = c = 3 => mC = Good;
 
 
-    -- time = 0 -> next_time(pre(time), ct);
     time = 0 -> if min_time(ct) <> INVALID_TIME
                 then min_time(ct)
                 else pre(time);
+    c = counter();
 
     -- outmX  : output event message for node X
     -- outtX  : output event time for node X
@@ -78,26 +70,26 @@ let
     -- 1) check if node A wants to write to calendar and do so
     -- 2) else, check if B has read and clear the calendar if so
     -- 3) else leave value is not changed
-    cm = [Missing,Missing] -> [ if writeA
+    cm = [Missing,Missing] -> [ if pre(writeA)
                                 then outmA
-                                else if readB
+                                else if pre(readB)
                                      then Missing
                                      else (pre cm)[0]
-                              , if writeB
+                              , if pre(writeB)
                                 then outmB
-                                else if readC
+                                else if pre(readC)
                                      then Missing
                                      else (pre cm)[1]
                               ];
 
-    ct = [INVALID_TIME,INVALID_TIME] -> [ if writeA
+    ct = [INVALID_TIME,INVALID_TIME] -> [ if pre(writeA)
                                           then outtA
-                                          else if readB
+                                          else if pre(readB)
                                                then INVALID_TIME
                                                else (pre ct)[0]
-                                        , if writeB
+                                        , if pre(writeB)
                                           then outtB
-                                          else if readC
+                                          else if (readC)
                                                then INVALID_TIME
                                                else (pre ct)[1]
                                         ];
@@ -113,11 +105,8 @@ node   nodeA (f: bool; time: time_t)
 var
     go: bool;
     fm: msg_t;
-    ap: bool;
 let
-    --%PROPERTY ap;
-    ap = go;
-    go = time = 0;
+    go = false -> time = 0;
     m  = Missing -> if go
                     then Good
                     else (pre m);
@@ -144,7 +133,7 @@ var
     go: bool;
     fm: msg_t;  -- fault model message
 let
-    go = (ct = time) and (cm <> Missing);
+    go = false -> (ct = time) and (cm <> Missing);
 
     -- read channel A -> B
     m  = Missing -> if go
@@ -173,7 +162,7 @@ node   nodeC (f: bool; time: time_t; cm: msg_t; ct: time_t)
 var
     go: bool;
 let
-    go = (ct = time) and (cm <> Missing);
+    go = false -> (ct = time) and (cm <> Missing);
 
     -- read channel B -> C
     m  = Missing -> if go
@@ -259,4 +248,10 @@ let
     rose = false -> if b and (not pre b)
                     then true
                     else false;
+tel;
+
+
+node counter() returns (c: int);
+let
+    c = 0 -> pre(c) + 1;
 tel;
