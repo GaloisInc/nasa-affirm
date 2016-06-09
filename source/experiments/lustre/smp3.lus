@@ -42,14 +42,15 @@ let
     -------------------------------------------------------------
 
     --%MAIN
-    assert not faults[0];
-    assert not faults[1];
-    assert not faults[2];
-
     --%PROPERTY p;
-    -- p = (time < 2 and mC = Missing) or (time = 2 and mC = Good);
-    -- p = not writeA;
-    p = c = 3 => mC = Good;
+
+    -- If there are no faulty nodes:
+    assert not faults[0] and not faults[1] and not faults[2];
+    p = c >= 3 => mC = Good;
+
+    -- If there is a faulty node, then:
+    -- assert not faults[0] and faults[1] and not faults[2];
+    -- p = c >= 3 => mC = Good or mC = Bad;
 
 
     time = 0 -> if min_time(ct) <> INVALID_TIME
