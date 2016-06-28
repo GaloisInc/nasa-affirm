@@ -46,11 +46,11 @@
 
 Fault-tolerant distributed systems are essential to life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
 
-There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Some of this work uses mechanical theorem-proving~\cite{}. Two problems with mechanical verification are that it requires specialized expertise and it is labor intensive. In contrast, model-checking is automated but has limited scalability. To address scalability, abstractions and optimizations are employed, both of which lead to problems. Verification abstractions are often ad-hoc and system-specific. For example, to model a node that can broadcast the values $\{0, 1\}$, or no value if when faulty, one might define an enumerated type of broadcast values sent such as
+There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Some of this work uses mechanical theorem-proving~\cite{}. Two problems with mechanical verification are that it requires specialized expertise and it is labor intensive. In contrast, model-checking is automated but has limited scalability. To address scalability, abstractions and optimizations are employed, both of which lead to problems. Verification abstractions are often ad-hoc and system-specific. For example, to model a process that can broadcast the values $\{0, 1\}$, or no value if when faulty, one might define an enumerated type of broadcast values sent such as
 
 $$\{0, 1, NONE\}$$
 
-However, the enumeration conflates environment artifacts (i.e., faults) and system artifacts. Conflating them makes formal model-to-code correspondence more difficult to achieve. An example of a verification optimization is to model message passing as shared state between nodes. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
+However, the enumeration conflates environment artifacts (i.e., faults) and system artifacts. Conflating them makes formal model-to-code correspondence more difficult to achieve. An example of a verification optimization is to model message passing as shared state between processes. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
 
 Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems.
 
@@ -58,7 +58,7 @@ We describe a generic formal model for fault-tolerant distributed systems that a
 
 The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to impose fault model constraints on the system. Doing so makes the fault-model compositional with the system and easy to modify. We also use synchronous observers to observe safety properties, eliding the need for complex linear temporal logic specifications. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
 
-We demonstrate the model with an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between nodes---it is the most scalable model-checking verification of the protocol.
+We demonstrate the model with an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between processes---it is the most scalable model-checking verification of the protocol.
 
 \lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking}
 
@@ -69,7 +69,7 @@ We demonstrate the model with an extended case-study, verifying the Oral Message
 \section{Formal Model}\label{sec:model}
 Here we describe our formal model specialized for fault-tolerant distributed systems. There are three principal abstractions we describe: calendar automata, synchronous observers, and abstract state machines; we describe each below.
 
-\subsection{Calendar Automata}\label{sec:calendar}
+\subsection{Calendar Automata}\label{sec:calendar}\label{sec:calendar}
 \emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{}. Time automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks} in a solver. While successful timed automata model-checkers exist, they are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks. Modern general-purpose model-checkers like \lee{name some} use SMT solvers for general infinite-state system verification that is not limited to real-time clocks.
 
 However, real-time system verification in general-purpose model-checkers requires an explicit formalism of real-time progression. Trying to encode real-time clocks directly is difficult; in particular, one must avoid Zeno's paradox in which no progress is made because state transitions simply update real-valued variables by an infinitesimally small amount~\cite{bruno,lamport}. To avoid this problem, Dutetre and Sorea developed \emph{calendar automata}~\cite{bruno}, which is itself inspired by event calendars used in discrete-event simulation.
@@ -80,17 +80,20 @@ Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. We do not define ev
 
 An \emph{event calendar} $\{ (e_0, t_0), (e_1, t_1), \ldots, (e_n, t_n) \}$ is a set of ordered pairs $(e_i, t_i)$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathbb{R}$ is a \emph{timeout}, the time at which the event is scheduled. We denote element $(e_1, t_1)$ of an event calendar by $c_i$.
 
-Let $c$ be an event calendar and $c_i, c_j \in c$ be calendar events. Define an ordering on event calendars such that $c_i \leq c_j$ iff $t_i \leq t_j$, and $min(c) = \{ c_i | \forall c_j \in c, \, c_i \leq c_j  \}$ are the minimum elements of $c$.
+Let $cal$ be an event calendar and $c_i, c_j \in c$ be calendar events. Define an ordering on event calendars such that $c_i \leq c_j$ iff $t_i \leq t_j$, and $min(c) = \{ c_i | \forall c_j \in cal, \, c_i \leq c_j  \}$ are the minimum elements of $cal$.
 
-Let a transition system $\mathcal{M} = (S, I, \rightarrow)$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that a state $\sigma \in S$ is a total function that maps state variables to values. We distinguish two special state variables in a transition system: (1) $now \in \mathbb{R}$ denotes the current time in the state, and (2) $c$ is an event calendar.
+Let a transition system $\mathcal{M} = (S, I, \rightarrow)$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that a state $\sigma \in S$ is a total function that maps state variables to values. We distinguish two special state variables in a transition system: (1) $now \in \mathbb{R}$ denotes the current time in the state, and (2) $cal$ is an event calendar.
 
 The following laws must hold of a transition system $\mathcal{M}$ implementing a calendar automaton:
 
 \begin{enumerate}
-\item Time is initialized to be less than or equal to every calendar timeout: $\forall \sigma \in I, \, \forall (e_i, t_i) \in \sigma(c)$, $\sigma(now) \leq t_i$.
-\item In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S \, \forall (e_i, t_i) \in \sigma(c)$, $t_i \geq \sigma(now)$.
-\item In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S, \, \forall (e_i, t_i) \in \sigma(c)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := min(c)]$.
-\item In all states, if the current time equals a timeout, then the only transition enabled is a calendar event update associated with the timeout: $\forall \sigma \in S, \, \exists (e_i, t_i) \in \sigma(c)$ such that $\sigma(now) = t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma'(now) = \sigma(now)$, $\sigma'(c_j) = \sigma(c_j)$ for all $c_j \in \sigma(c)$ such that $c_j \neq c_i$, and $\sigma'(t_i) > \sigma(t_i)$.
+\item Time is initialized to be less than or equal to every calendar timeout: $\forall \sigma \in I, \, \forall (e_i, t_i) \in \sigma(cal)$, $\sigma(now) \leq t_i$.
+
+\item In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S \, \forall (e_i, t_i) \in \sigma(cal)$, $t_i \geq \sigma(now)$.
+
+\item In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S, \, \forall (e_i, t_i) \in \sigma(cal)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := min(c)]$.
+
+\item In all states, if the current time equals a timeout, then the only transition enabled is a calendar event update associated with the timeout: $\forall \sigma \in S, \, \exists (e_i, t_i) \in \sigma(cal)$ such that $\sigma(now) = t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma'(now) = \sigma(now)$, $\sigma'(c_j) = \sigma(c_j)$ for all $c_j \in \sigma(c)$ such that $c_j \neq c_i$, and $\sigma'(t_i) > \sigma(t_i)$.
 \end{enumerate}
 
 \begin{lemma}[Monotonic time]
@@ -101,13 +104,13 @@ In a distributed system, it is convenient to distinguish global actions and loca
 
 Following Dutetre and Sorea, we associate calendar events with channels in a distributed system~\cite{dutetre}. Specializing calendars to message passing does not lose generality since all external communication from an individual process can be abstracted as message passing. Furthermore, typical fault models can be abstracted to act over channels rather than processes~\cite{abstractions}. The calendar introduces real-time constraints on when processes send and receive messages.
 
-Assume processes are indexed with the natural numbers $\mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $Msg$, with a designated element $null \in Msg$ denoting the absence of a message. Given a channel and a timeout, let $send$ return the message sent on the channel at that time:
-$$send : \mathbb{N} \times \mathbb{N} -> \mathbb{R} -> Msg$$
+Assume processes are indexed from a finite set $Id \subset \mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $Msg$, with a designated element $null \in Msg$ denoting the absence of a message. Given a channel and a timeout, let $send$ return the message sent on the channel at that time:
+$$send : Id \times Id \rightarrow \mathbb{R} \rightarrow Msg$$
 So $send(i, j, t)$ returns the message that $i$ sends to $j$ at time $t$. Likewise, let
-$$recv : \mathbb{N} \times \mathbb{N} -> \mathbb{R} -> Msg$$
+$$recv : Id \times Id \rightarrow \mathbb{R} \rightarrow Msg$$
 compute the message received on that channel at that time, so that $recv(i, j, t)$ returns the message received by $j$ from $i$ at time $t$.
 
-We require that messages received were previously sent and not previously received: if $recv(i, j, t) \neq null$, then $\exists t'$ such that $send(i, j, t')$ where $t' < t$, $recv(i, j, t) = send(i, j, t')$, and $\neg\exists t''$ such that $t' < t'' < t$ and $recv(i, j, t'') = recv(i, j, t)$
+In the non-faulty case, we require that messages received were previously sent and not previously received: if $recv(i, j, t) \neq null$, then $\exists t'$ such that $send(i, j, t')$ where $t' < t$, $recv(i, j, t) = send(i, j, t')$, and $\neg\exists t''$ such that $t' < t'' < t$ and $recv(i, j, t'') = recv(i, j, t)$. (We address faults in Section~\ref{sec:kibitzer}.)
 
 Then an event calendar for sending and receiving messages on channels is a set of send or receive events together with their timeouts that yield non-null messages; that is,
 $$
@@ -152,7 +155,7 @@ The benefit of the synchronous observer approach is that we can develop a system
 
 
 % ------------------------------------------------------------
-\section{The Synchronous Kibitzer}
+\section{The Synchronous Kibitzer}\label{sec:kibitzer}
 The typical approach to injecting faults into a formal model of a distributed system is to add a new state variables to each process representing its fault state. Then additional state variables are added to represent the nondeterminism introduced by faults into the state or messages by a process. Finally, additional transitions are added to each process to modify the process's state or messages based on it's current fault state.
 
 This straightforward approach introduces substantial additional state and nondeterminism, reducing the scalability of model-checking. Modeling faults is particularly expensive given that additional state and nondeterminism is added to each process. These scalability issues are noted throughout the literature. For example, \lee{TTA startup paper, helmut's paper, etc.}
@@ -165,13 +168,50 @@ Another difficulty with adding faults to a model is that the number of states th
 To achieve the full range of faulty behaviors, it seems that a faulty source should be able to send a different incorrect value to each relay, and this requires n different values. It might seem that we need some additional incorrect values 3 so that faulty relays can exhibit their full range of behaviors. It would certainly be safe to introduce additional values for this purpose, but the performance of model checking is very sensitive to the size of the state space, so there is a countervailing argument against introducing additional values. A little thought will show that the way faulty relays have their most significant impact is by tipping the majority vote in a receiver one way or the other, and this can only be achieved if they use the same values as nonfaulty relays. Hence, we decide against further extension to the range of values~\cite{}.
 \end{quote}
 
-To address these problems, we introduce a synchronous observer that injects faults that we call a \emph{synchronous kibitzer}. The kibitzer decomposes the state and transitions associated with the fault model from the system.
+To address these problems, we introduce a synchronous observer that injects faults that we call a \emph{synchronous kibitzer}. The kibitzer decomposes the state and transitions associated with the fault model from the system. For the sake of concreteness, we introduce a particular fault model, the hybrid fault model of Thambidurai and Park~\cite{}. The fault model distinguishes Byzantine (or arbitrary), symmetric, and manifest faults. This fault model applies to broadcast systems, in which a process is expected to broad the same value to multiple receivers. A \emph{Byzantine fault} is one in which a process that is intended to broadcast the same value to other processes may instead broadcast arbitrary values to different receivers (including no value or the correct value). A \emph{symmetric fault} is one in which a process may broadcast the same, but incorrect, value to other processes, and a \emph{manifest fault} is one in which a process's broadcast fault is detectable by the receivers; e.g., by performing a cyclic redundancy check (CRC) or because the value arrives outside of a predetermined window.
 
-For the sake of concreteness, we introduce
- under the hybrid fault model of Thambidurai and Park~\cite{}. The fault model distinguishes Byzantine (or arbitrary), symmetric, and manifest faults. This fault model applies to broadcast systems, in which a process is expected to broad the same value to multiple receivers. A Byzantine faulty
+In specifying a fault-tolerant system, we must also specify a \emph{maximum fault assumption} (MFA), which specifies the maximum number of of each kind of fault that may be present in the system for some system property to hold. Define a enumeration of fault types $$\textnormal{FAULT\_TYPE} = \{none, byz, sym, man\}$$. As in the previous section, let $Id \subset \mathbb{N}$ be a finite set of indices, and let the variable $$faults: Id \rightarrow \textnormal{FAULT\_TYPE}$$ range over possible mappings from process indices to faults.
+
+The hybrid fault model assumes a broadcast model of communication.
+% Define $rnd: \mathbb{R} \rightarrow \mathbb{N}$ such that if $rnd(t_0) < rnd(t_1)$, then $t_0 < t_1$.
+A $broadcast: Id \rightarrow 2^{Id} \rightarrow \mathbb{R} \rightarrow Msg \rightarrow 2^{E}$ takes a sender, a set of receivers, a real-time, and a message to send each receiver, and returns a set of calendar events:
+$$broadcast(i, R, t, m) = \{m | j \in R \textnormal{ and } send(i, j, t) = m\}$$
+
+\lee{msg in SAL is recv here}
+
+With this machinery, we can define the semantics of faults by constraining the relationship between a message broadcast and the values received by the recipients. For a nonfaulty process that broadcasts, every recipient receives the sent message.
+\begin{align*}
+&nonfaulty\_constraint =\\
+  &\quad \forall i, j \in Id, t \in \mathbb{R}.\\
+  &\quad\quad (faults(i) = none\\
+  &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = send(i, j, t)
+\end{align*}
+\noindent
+For symmetric faults, we there is no requirement that the messages sent are the ones received, only that every recipient receives the same value.
+\begin{align*}
+&sym\_constraint =\\
+  &\quad \forall i, j, k \in Id, t \in \mathbb{R}.\\
+  &\quad\quad (faults(i) = sym \textnormal{ and } broadcast(i, \{j, k\}, t, m))\\
+  &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = recv(i, k, t)
+\end{align*}
+\noindent
+Byzantine faults are left completely unconstrained.
 
 % ------------------------------------------------------------
-\section{Abstract State Machines}\label{sec:abstract}
+\section{Abstract State Machines}\label{sec:abstract}\label{sec:asms}
+When model-checking a system, counterexamples to properties are traces of states. A state is a collection of variable values. For industrial-scale models, there are many 10s or even 100s of state variables. So a single state includes assignments to each of the variables, and counterexample trace may be many 10s of states in length. In practice, counterexamples depend on a small number of state variables. The user has to manually separate the state variables that matter from those that do not for a specific property. It is not enough prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when model-checking models that have sufficient detail for implementation synthesis, as is the goal in our work.
+
+Systems are usually designed in modes such predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
+
+Our solution to the problem of constructing a mode-based state machine uses abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize the Church-Turing thesis for abstract data structures~\cite{}. Since then, ASMs have become an engineering technique for simulating a system at different levels of abstraction.
+
+\lee{http://www2.informatik.hu-berlin.de/sam/preprint/reisig203.pdf}
+More precisely, we implement a sequential small-step ASM~\cite{}.
+\begin{definition}[Sequential small-step ASM]
+Let $V$ be a finite set of state variables. Let $s$ be an assignment of variables to values, and let $b$ be a relation Å
+\end{definition}
+
+
 
 % ------------------------------------------------------------
 \section{An Extended Example: Byzantine Agreement}\label{sec:byz}
