@@ -1,0 +1,321 @@
+-- smp3.lus
+--
+-- A model of smp3.sal in Lustre: simple msg_t passing with 3 nodes
+--
+
+type msg_t  = enum { Missing, Good, Bad };
+type time_t = int;
+
+const TIME_DELTA   : time_t = 1;
+const INVALID_TIME : time_t = -1;
+
+-- inputs:  fault flag for each node
+node    main (faults: bool[4]) returns ();
+var
+    -- properties
+    p: bool;           -- main safety property
+    c: int;            -- system step counter
+
+    -- calendar entries for channels A -> B_i -> C
+    cm0, cm1, cm2, cm3, cm4, cm5: msg_t;   -- cal messages
+    ct0, ct1, ct2, ct3, ct4, ct5: time_t;  -- cal event times
+
+    -- node outputs
+    outmA, outmB0, outmB1, outmB2: msg_t;
+    outtA, outtB0, outtB1, outtB2: time_t;
+
+    -- node latches
+    mA, mB0, mB1, mB2, mC: msg_t;
+
+    -- read/write flags (pulse on event)
+    readA, writeA: bool;
+    readB0, writeB0: bool;
+    readB1, writeB1: bool;
+    readB2, writeB2: bool;
+    readC3, readC4, readC5: bool;
+
+    -- global time
+    time : time_t;
+let
+
+    -------------------------------------------------------------
+    --  PROPERTIES TO VERIFY
+    -------------------------------------------------------------
+
+    --%MAIN
+    --%PROPERTY p;
+
+    -- If there are no faulty nodes:
+    assert not faults[0] and not faults[1] and not faults[2] and not faults[3];
+    p = c >= 3 => mC = Bad;
+
+    -- If there is a faulty node, then:
+    -- assert not faults[0] and faults[1] and not faults[2];
+    -- p = c >= 3 => mC = Good or mC = Bad;
+
+
+    time = 0 -> if min_time(ct0, ct1) <> INVALID_TIME
+                then min_time(ct0, ct1)
+                else pre(time);
+    c = counter();
+
+    -- outmX  : output event message for node X
+    -- outtX  : output event time for node X
+    -- readX  : read from calendar event for node X (pulse)
+    -- writeX : write to calendar event for node X (pulse)
+    -- mX     : message latch for node X
+    (outmA, outtA, readA, writeA, mA) = nodeA(faults[0], time);
+
+    (outmB0, outtB0, readB0, writeB0, mB0) = nodeB(faults[1], time, cm0, ct0);
+    (outmB1, outtB1, readB1, writeB1, mB1) = nodeB(faults[2], time, cm1, ct1);
+    (outmB2, outtB2, readB2, writeB2, mB2) = nodeB(faults[3], time, cm2, ct2);
+
+    (readC3, readC4, readC5, mC) = nodeC(time, cm3, cm4, cm5, ct3, ct4, ct5);
+
+    -- latch node outputs to the calendar on 'readX' or 'writeX' events
+    -- 1) check if node A wants to write to calendar and do so
+    -- 2) else, check if B has read and clear the calendar if so
+    -- 3) else leave value is not changed
+    ---------------------------------------
+    cm0 = Missing -> if pre(writeA)           -- channel 0: A -> B0
+                     then outmA
+                     else if pre(readB0)
+                          then Missing
+                          else pre(cm0);
+    cm1 = Missing -> if pre(writeA)           -- channel 1: A -> B1
+                     then outmA
+                     else if pre(readB1)
+                          then Missing
+                          else pre(cm1);
+    cm2 = Missing -> if pre(writeA)           -- channel 2: A -> B2
+                     then outmA
+                     else if pre(readB2)
+                          then Missing
+                          else pre(cm2);
+
+    ct0 = INVALID_TIME -> if pre(writeA)
+                          then outtA
+                          else if pre(readB0)
+                               then INVALID_TIME
+                               else pre(ct0);
+    ct1 = INVALID_TIME -> if pre(writeA)
+                          then outtA
+                          else if pre(readB1)
+                               then INVALID_TIME
+                               else pre(ct1);
+    ct2 = INVALID_TIME -> if pre(writeA)
+                          then outtA
+                          else if pre(readB2)
+                               then INVALID_TIME
+                               else pre(ct2);
+
+    ---------------------------------------
+    cm3 = Missing -> if pre(writeB0)          -- channel 3: B0 -> C
+                     then outmB0
+                     else if pre(readC3)
+                          then Missing
+                          else pre(cm3);
+    cm4 = Missing -> if pre(writeB1)          -- channel 4: B1 -> C
+                     then outmB1
+                     else if pre(readC4)
+                          then Missing
+                          else pre(cm4);
+    cm5 = Missing -> if pre(writeB2)          -- channel 5: B2 -> C
+                     then outmB2
+                     else if pre(readC5)
+                          then Missing
+                          else pre(cm5);
+
+    ct3 = INVALID_TIME -> if pre(writeB0)
+                          then outtB0
+                          else if (readC3)
+                               then INVALID_TIME
+                               else pre(ct3);
+    ct4 = INVALID_TIME -> if pre(writeB1)
+                          then outtB1
+                          else if (readC4)
+                               then INVALID_TIME
+                               else pre(ct4);
+    ct5 = INVALID_TIME -> if pre(writeB2)
+                          then outtB2
+                          else if (readC5)
+                               then INVALID_TIME
+                               else pre(ct5);
+    ---------------------------------------
+
+tel;
+
+
+-- NODE A ------------------------------------------------------------------
+
+-- node A sends a message to node B
+node   nodeA (f: bool; time: time_t)
+     returns (outm: msg_t; outt: time_t; read: bool; write: bool; m: msg_t);
+var
+    go: bool;
+    fm: msg_t;
+let
+    go = false -> time = 0;            -- transition guard
+    m  = Missing -> if go
+                    then Good
+                    else (pre m);
+    fm = if not f then m else Bad;     -- fault model
+    read  = false;
+
+    -- write channel A -> B
+    outm  = fm;
+    outt  = time + TIME_DELTA;
+    write = riseb(go);
+tel;
+
+
+-- NODE B ------------------------------------------------------------------
+
+-- node B receives a message from node A and sends a message to node C
+node   nodeB (f: bool; time: time_t; cm: msg_t; ct: time_t)
+     returns (outm: msg_t; outt: time_t; read: bool; write: bool; m: msg_t);
+var
+    go: bool;
+    fm: msg_t;  -- fault model message
+let
+    go = false -> (ct = time) and (cm <> Missing);  -- transition guard
+
+    -- read channel A -> B
+    m  = Missing -> if go                           -- latch m <- cm
+                    then cm
+                    else (pre m);
+    fm = if not f then m else Bad;  -- fault model
+
+    -- read channel A -> B
+    read  = riseb(go);              -- generate pulse on rising edge of 'go'
+
+    -- write channel B -> C
+    outm  = fm;
+    outt  = time + TIME_DELTA;
+    write = riseb(go);
+tel;
+
+
+-- NODE C ------------------------------------------------------------------
+
+node   nodeC (time: time_t; cm3, cm4, cm5: msg_t; ct3, ct4, ct5: time_t)
+     returns ( read3, read4, read5: bool
+             ; m: msg_t);
+var
+    go3, go4, go5, go_vote: bool;
+    buf3, buf4, buf5: msg_t;
+let
+    go3 = false -> (ct3 = time) and (cm3 <> Missing);  -- transition guard
+    go4 = false -> (ct4 = time) and (cm4 <> Missing);
+    go5 = false -> (ct5 = time) and (cm5 <> Missing);
+
+    -- read channel B0 -> C
+    read3  = riseb(go3);
+    buf3  = Missing -> if go3          -- latch buf3 <- cm3
+                       then cm3
+                       else pre(buf3);
+    -- read channel B1 -> C
+    read4  = riseb(go4);
+    buf4  = Missing -> if go4          -- latch buf4 <- cm4
+                       then cm4
+                       else pre(buf4);
+    -- read channel B2 -> C
+    read5  = riseb(go5);
+    buf5  = Missing -> if go5          -- latch buf5 <- cm5
+                       then cm5
+                       else pre(buf5);
+
+    go_vote =     buf3 <> Missing
+              and buf4 <> Missing
+              and buf5 <> Missing;
+
+    m = Missing -> if go_vote
+                   then if buf3 = buf4                      -- majority vote
+                        then buf3
+                        else if buf3 = buf5
+                             then buf3
+                             else if buf4 = buf5
+                                  then buf4
+                                  else buf5
+                   else pre(m);
+tel;
+
+
+-- Helper nodes ---------------------------------------------
+
+-- assume: time >= 0
+node next_time (time: time_t; ct0, ct1: time_t)
+     returns   (ntime: time_t);
+var
+    mtime: time_t;
+let
+    mtime = min_time(ct0, ct1);
+    ntime = if time = ct0 or time = ct1 or mtime = INVALID_TIME
+            then time
+            else mtime;
+tel;
+
+-- assume: either ct[i] >= 0 or ct[i] == INVALID_TIME
+-- returns: minimum of input times among those that are positive
+--          otherwise INVALID_TIME
+node min_time (ct0, ct1: time_t)
+     returns  (mtime: time_t);
+var
+    p0, p1 : bool;
+let
+    p0 = ct0 >= 0;
+    p1 = ct1 >= 0;
+    mtime = if p0 and p1
+            then (if ct0 <= ct1
+                  then ct0
+                  else ct1)
+            else if p0
+                 then ct0
+                 else ct1;
+tel;
+
+-- rising edge on a message signal
+node risem   (m: msg_t)
+     returns (rose: bool);
+let
+    rose = false -> if (pre m = Missing) and (m <> Missing)
+                    then true
+                    else false;
+tel;
+
+-- rising edge on a time signal
+node riset   (t: time_t)
+     returns (rose: bool);
+let
+    rose = false -> if (pre t = INVALID_TIME) and (t >= 0)
+                    then true
+                    else false;
+tel;
+
+-- falling edge on a time signal
+node fallt   (t: time_t)
+     returns (fell: bool);
+let
+    fell = false -> if (pre(t) >= 0) and (t = INVALID_TIME)
+                    then true
+                    else false;
+tel;
+
+-- rising edge on a boolean signal
+--
+--    __---_
+--    __-___
+--
+node riseb   (b: bool)
+     returns (rose: bool);
+let
+    rose = false -> if b and (not pre b)
+                    then true
+                    else false;
+tel;
+
+
+node counter() returns (c: int);
+let
+    c = 0 -> pre(c) + 1;
+tel;
