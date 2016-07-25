@@ -44,21 +44,25 @@
 
 \section{Introduction}
 
-Fault-tolerant distributed systems are essential to life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
+Fault-tolerant distributed systems are essential to reliable life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
 
-There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Some of this work uses mechanical theorem-proving~\cite{}. Two problems with mechanical verification are that it requires specialized expertise and it is labor intensive. In contrast, model-checking is automated but has limited scalability. To address scalability, abstractions and optimizations are employed, both of which lead to problems. Verification abstractions are often ad-hoc and system-specific. For example, to model a process that can broadcast the values $\{0, 1\}$, or no value if when faulty, one might define an enumerated type of broadcast values sent such as
+There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Most of this work uses interactive theorem-proving~\cite{}. Interactive theorem-proving is useful in the domain because of the complexity of the models; automated methods are difficult to scale. However, two problems with interactive verification are that it requires specialized expertise and it is labor intensive.
+
+In contrast, model-checking is automated but has limited scalability. To address scalability, abstractions and optimizations are employed, both of which lead to problems.
+
+Verification abstractions are often ad-hoc and system-specific. For example, to model a process that can broadcast the values $\{0, 1\}$, or no value when faulty, one might define an enumerated type of broadcast values sent such as
 
 $$\{0, 1, NONE\}$$
 
 However, the enumeration conflates environment artifacts (i.e., faults) and system artifacts. Conflating them makes formal model-to-code correspondence more difficult to achieve. An example of a verification optimization is to model message passing as shared state between processes. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
 
-Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems.
+Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems in which verification is more automated than in traditional interactive theorem-proving.
 
 We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{Dutertre-Sorea}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
 
 The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to impose fault model constraints on the system. Doing so makes the fault-model compositional with the system and easy to modify. We also use synchronous observers to observe safety properties, eliding the need for complex linear temporal logic specifications. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
 
-We demonstrate the model with an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between processes---it is the most scalable model-checking verification of the protocol.
+We validate the model with a number of small examples \lee{todo}, as well as an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between processes---it is the most scalable model-checking verification of the protocol.
 
 \lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking}
 
@@ -70,15 +74,15 @@ We demonstrate the model with an extended case-study, verifying the Oral Message
 Here we describe our formal model specialized for fault-tolerant distributed systems. There are three principal abstractions we describe: calendar automata, synchronous observers, and abstract state machines; we describe each below.
 
 \subsection{Calendar Automata}\label{sec:calendar}\label{sec:calendar}
-\emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{}. Time automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks} in a solver. While successful timed automata model-checkers exist, they are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks. Modern general-purpose model-checkers like \lee{name some} use SMT solvers for general infinite-state system verification that is not limited to real-time clocks.
+\emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{}. Timed automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks} in a solver. Timed automata model-checkers are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks. Modern general-purpose model-checkers like \lee{name some} use SMT solvers for general infinite-state system verification that is not limited to real-time clocks.
 
 However, real-time system verification in general-purpose model-checkers requires an explicit formalism of real-time progression. Trying to encode real-time clocks directly is difficult; in particular, one must avoid Zeno's paradox in which no progress is made because state transitions simply update real-valued variables by an infinitesimally small amount~\cite{bruno,lamport}. To avoid this problem, Dutetre and Sorea developed \emph{calendar automata}~\cite{bruno}, which is itself inspired by event calendars used in discrete-event simulation.
 
 Calendar automata avoid the problems of encoding timed automata. Rather than encoding ``how much time has passed since the last event'', it encodes ``how far into the future is the next scheduled event'', and a real-valued variable representing the current time is updated to the next event time. Doing so avoids Zeno updates.
 
-Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. We do not define events; intuitively, an event is a set of state variables. When an event is \emph{enabled}, the transitions over events are enabled; otherwise, the variables stutter and maintain the same value.
+Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. For now, we do not define events; intuitively, an event is a set of state variables (shortly, we will associate events with messages sent in a distributed system). When an event is \emph{enabled}, the transitions over events are enabled; otherwise, the variables stutter and maintain the same value.
 
-An \emph{event calendar} $\{ (e_0, t_0), (e_1, t_1), \ldots, (e_n, t_n) \}$ is a set of ordered pairs $(e_i, t_i)$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathbb{R}$ is a \emph{timeout}, the time at which the event is scheduled. We denote element $(e_1, t_1)$ of an event calendar by $c_i$.
+An \emph{event calendar} $\{ (e_0, t_0), (e_1, t_1), \ldots, (e_n, t_n) \}$ is a set of ordered pairs $(e_i, t_i)$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathbb{R}$ is a \emph{timeout}, the time at which the event is scheduled. We denote element $(e_i, t_i)$ of an event calendar by $c_i$.
 
 Let $cal$ be an event calendar and $c_i, c_j \in c$ be calendar events. Define an ordering on event calendars such that $c_i \leq c_j$ iff $t_i \leq t_j$, and $min(c) = \{ c_i | \forall c_j \in cal, \, c_i \leq c_j  \}$ are the minimum elements of $cal$.
 
@@ -100,26 +104,22 @@ The following laws must hold of a transition system $\mathcal{M}$ implementing a
 $\forall \sigma, \sigma' \in S$, if $\sigma \rightarrow \sigma'$, then $\sigma'(now) \geq \sigma(now)$.
 \end{lemma}
 
-In a distributed system, it is convenient to distinguish global actions and local actions. Global actions are principally interprocess communication, while local actions are those carried out by each process to update its local state and produce new messages to broadcast. While both global and local actions can both be modeled as events in a calendar automata, doing so is generally overkill and complicates the model. Real-time constraints matter at the system-level but rarely within an individual process. From the global perspective, individual processes can update their local state atomically.
+In a distributed system, it is convenient to distinguish global actions and local actions. Global actions are principally interprocess communication, while local actions are those carried out by each process to update its local state and produce new messages to broadcast. While both global and local actions can both be modeled as events in a calendar automata, doing so is generally overkill and complicates the model. From the global perspective, individual processes can update their local state atomically.
 
 Following Dutetre and Sorea, we associate calendar events with channels in a distributed system~\cite{dutetre}. Specializing calendars to message passing does not lose generality since all external communication from an individual process can be abstracted as message passing. Furthermore, typical fault models can be abstracted to act over channels rather than processes~\cite{abstractions}. The calendar introduces real-time constraints on when processes send and receive messages.
 
-Assume processes are indexed from a finite set $Id \subset \mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $Msg$, with a designated element $null \in Msg$ denoting the absence of a message. Given a channel and a timeout, let $send$ return the message sent on the channel at that time:
-$$send : Id \times Id \rightarrow \mathbb{R} \rightarrow Msg$$
-So $send(i, j, t)$ returns the message that $i$ sends to $j$ at time $t$. Likewise, let
-$$recv : Id \times Id \rightarrow \mathbb{R} \rightarrow Msg$$
-compute the message received on that channel at that time, so that $recv(i, j, t)$ returns the message received by $j$ from $i$ at time $t$.
+Assume processes are indexed from a finite set $Id \subset \mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $Msg$. Given a channel and a timeout, let $send$ be a relation on messages sent on a channel at a given time:
+$$send \subseteq Id \times Id \times \mathbb{R} \times Msg$$
+So $send(i, j, t, m)$ holds iff $i$ sends to $j$ message $m$ at time $t$. Likewise, let
+$$recv \subseteq Id \times Id \times \mathbb{R} \times Msg$$
+be a relation on messages received on a channel at a time, so that $recv(i, j, t, m)$ holds iff the message $m$ received by $j$ from $i$ at time $t$.
 
-In the non-faulty case, we require that messages received were previously sent and not previously received: if $recv(i, j, t) \neq null$, then $\exists t'$ such that $send(i, j, t')$ where $t' < t$, $recv(i, j, t) = send(i, j, t')$, and $\neg\exists t''$ such that $t' < t'' < t$ and $recv(i, j, t'') = recv(i, j, t)$. (We address faults in Section~\ref{sec:kibitzer}.)
+In the non-faulty case, we require that messages received were previously sent and not previously received: if $recv(i, j, t, m)$, then $\exists t'$ such that $send(i, j, t', m)$ where $t' < t$, and $\neg\exists t''$ such that $t' < t'' < t$ and $recv(i, j, t'', m) = recv(i, j, t, m)$. (We address faults in Section~\ref{sec:kibitzer}.)
 
-Then an event calendar for sending and receiving messages on channels is a set of send or receive events together with their timeouts that yield non-null messages; that is,
-$$
-\{ (e, t) | \forall i,j: e \neq null \textnormal{ and } (e = send(i, j, t) \textnormal{ or } e = recv(i, j, t))
-\}
-$$
+Then an event calendar for sending and receiving messages on channels is the union of the $send$ and $recv$ relations.
 
 \lee{technically, atomic time is just a convenience.}
-The event of receiving a message initiates a process to update its local state machine and generate additional messages to send. When the process is updating its local state machine, the event calendar is paused. That is, updating an event $recv(i, j, t)$ implicitly includes updating $j$'s state machine.
+The event of receiving a message initiates a process to update its local state machine and generate additional messages to send. When the process is updating its local state machine, the event calendar is paused. That is, updating an event $recv(i, j, t, m)$ also includes updating $j$'s state machine.
 
 \lee{note that we don't need full generality of send and receive events in OM(1)}
 
@@ -127,7 +127,7 @@ The event of receiving a message initiates a process to update its local state m
 Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables. Synchronous observers are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the domain~\cite{}. The general form for specifying synchronous observers is the following:
 $$system | assumptions | requirements$$
 \noindent
-where `$|$' denotes synchronous composition of state machines. The assumptions constrain the system's state variables, while the requirements monitor the system's state variables.
+where `$|$' denotes synchronous composition of state machines. The assumptions constrain the system's state variables, while the requirements monitor the system's state variables. 
 
 The benefit of the synchronous observer approach is that we can develop a system specification that contains no extraneous modeling context from which to synthesize an implementation. For example, we do not want synthesize an implementation that injects faults! Furthermore, modifying assumptions and requirements is simpler when they are not distributed throughout the model.
 
@@ -153,6 +153,7 @@ The benefit of the synchronous observer approach is that we can develop a system
 
 \subsection{Property Observer}
 
+\lee{todo}
 
 % ------------------------------------------------------------
 \section{The Synchronous Kibitzer}\label{sec:kibitzer}
@@ -160,7 +161,7 @@ The typical approach to injecting faults into a formal model of a distributed sy
 
 This straightforward approach introduces substantial additional state and nondeterminism, reducing the scalability of model-checking. Modeling faults is particularly expensive given that additional state and nondeterminism is added to each process. These scalability issues are noted throughout the literature. For example, \lee{TTA startup paper, helmut's paper, etc.}
 
-Not only is modeling faults expensive, but it is generally non-compositional. For example, to model-check the Oral Messages algorithm~\cite{} that provides interactive consistency in the presence of Byzantine faults, Rushby every transition of the General and Lieutenant processes acts on their fault state~\cite{}.
+Not only is modeling faults expensive, but it is generally non-compositional. For example, in a classic model-checking model of the fault-tolerant Oral Messages algorithm~\cite{}, every transition of the sending processes updates environmental state variables associated with the fault state.
 
 Another difficulty with adding faults to a model is that the number of states that must be introduced may be dependent non-obviously on other aspects of the fault model, specific protocol, and system size. Furthermore, since SAT-based model-checking is NP-complete, it is important not to introduce any state beyond the minimal required. Such constraints lead to ``meta-model'' reasoning, such as the following, as described by Rushby:
 
