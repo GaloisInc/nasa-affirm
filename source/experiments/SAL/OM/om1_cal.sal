@@ -1062,7 +1062,7 @@ missing_buffer_size: LEMMA system_obs |-
 %
 % Proved:
 % sal-inf-bmc -i -d 1 \
-%     -l missing_buffer_size -l abstract_invt \
+%     -l missing_buffer_size \
 %     om1_cal.sal receiver_mode_invt
 %
 receiver_mode_invt: LEMMA system_obs |-
