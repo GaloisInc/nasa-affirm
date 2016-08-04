@@ -10,9 +10,8 @@ import Language.Atom
 
 -- Parameters ----------------------------------------------------------
 
-goodMsg = Const 1 :: E Word64
 
--- Time in ticks between each node's activity
+-- Node clock periods (in ticks)
 initPeriod     = 100
 sourcePeriod   = 20
 relayPeriod    = 7
@@ -28,33 +27,31 @@ recvSet  = [0..numRecvs-1]
 
 -- OM(1) Spec ------------------------------------------------------------
 
+newChannel :: String -> Atom (ChanInput, ChanOutput)
+newChannel = flip channel missingMsgValue
+
 -- | Top level rule
 om1 :: Atom ()
 om1 = do
   -- setup channels for communication between source, relays, and receivers
-  s2rs <- mapM msgVar [ tg "s2r" i | i <- relaySet ]
-  r2rs <- mapM (mapM msgVar) [ [ tg2 "r2r" i j | j <- recvSet ]
-                                               | i <- relaySet ]
+  s2rs <- mapM newChannel [ tg "s2r" i | i <- relaySet ]
+  r2rs <- mapM (mapM newChannel) [ [ tg2 "r2r" i j | j <- recvSet ]
+                                                   | i <- relaySet ]
   votes <- mapM msgVar [ tg "vote" j | j <- recvSet ]
 
-  -- print initial probe values
-  period initPeriod . atom "init" $ do
-    done <- bool "done" False
-    atom "init_poll" $ do
-      cond $ not_ (value done)
-      printStrLn "Initial probe values:"
-      ps <- probes
-      mapM_ printProbe ps
-      done <== Const True
 
-  -- declare system nodes
-  source s2rs
+  -- declare source node
+  source (map fst s2rs)
 
+  -- declare relay nodes
   forM_ relaySet $ \ident ->
-    relay ident (s2rs !! ident) (r2rs !! ident)
+    relay ident (snd (s2rs !! ident))
+                (map fst (r2rs !! ident))
 
+  -- declare receiver nodes
   forM_ recvSet $ \ident ->
-    recv ident [ (r2rs !! i) !! ident | i <- relaySet ] (votes !! ident)
+    recv ident [ snd ((r2rs !! i) !! ident) | i <- relaySet ]
+         (votes !! ident)
 
   -- declare the observer
   observer
@@ -63,47 +60,46 @@ om1 = do
 -- Source --------------------------------------------------------------
 
 -- | Source node ("General")
-source :: [V MsgType]  -- ^ output channels
+source :: [ChanInput]  -- ^ output channels
        -> Atom ()
 source cs = period sourcePeriod
           . atom "source" $ do
   done <- bool "done" False
-  let source_msg = goodMsg
+  cond $ not_ (value done)
 
-  atom "source_poll" $ do
-    cond $ not_ (value done)
-    forM_ cs $ \c -> do
-      c <== source_msg
-    done <== Const True
+  forM_ cs $ \c -> do
+    writeChannel c goodMsg
+
+  done <== Const True
 
 
 -- Relays --------------------------------------------------------------
 
 -- | Relay node ("Lieutenant")
 relay :: Int          -- ^ relay id
-      -> V MsgType    -- ^ input channel
-      -> [V MsgType]  -- ^ output channel(s)
+      -> ChanOutput   -- ^ channel from source
+      -> [ChanInput]  -- ^ channels to receivers
       -> Atom ()
 relay ident inC outCs = period relayPeriod
                       . atom (tg "relay"  ident) $ do
   done <- bool "done" False
   msg  <- msgVar (tg "relay_msg" ident)
+  cond $ isMissing msg  -- we haven't stored a value yet
+  condChannel inC       -- there is a value available
 
-  atom (tg "relay_poll" ident) $ do
-    cond $ isMissing msg         -- we haven't stored a value yet
-    cond $ not_ (isMissing inC)  -- there is a value available
-    msg  <== value inC
-    forM_ outCs $ \c -> do
-      c <== value inC
-    done <== Const True
+  msg  <== readChannel inC
+  forM_ outCs $ \c -> do
+    let m = readChannel inC :: E MsgType
+    writeChannel c m
+  done <== Const True
 
 
 -- Receivers -----------------------------------------------------------
 
 -- | Receiver node ("Lieutenant")
 recv :: Int  -- ^ receiver id
-     -> [V MsgType]  -- ^ input channels
-     -> V MsgType    -- ^ vote
+     -> [ChanOutput]  -- ^ channels from relays
+     -> V MsgType
      -> Atom ()
 recv ident inCs vote = period recvPeriod
                 . atom (tg "recv" ident) $ do
@@ -112,9 +108,9 @@ recv ident inCs vote = period recvPeriod
 
   forM_ relaySet $ \i -> do
     atom (tg2 "recv_poll" ident i) $ do
-      cond $ not_ (isMissing (inCs !! i))
       cond $ isMissing (buffer !! i)
-      (buffer !! i) <== value (inCs !! i)
+      condChannel (inCs !! i)
+      (buffer !! i) <== readChannel (inCs !! i)
 
   atom (tg "recv_vote" ident) $ do
     cond $ all_ (not_ . isMissing) buffer
@@ -129,15 +125,15 @@ computeVote = fst . foldr iter (missingMsgValueE, Const 0)
     iter x (y, c) = ( mux (x ==. y) onTrue1 onFalse1
                     , mux (x ==. y) onTrue2 onFalse2)
       where
+        -- rules:
+        -- x ==. y   = (y, c+1)
+        -- c == 0    = (x, 1)
+        -- otherwise = (y, c-1)
         onTrue1       = y
         onTrue2       = c + (Const 1)
         onFalse1      = mux (c ==. Const 0) x y
         onFalse2      = mux (c ==. Const 0) (Const 1) (c - (Const 1))
         _             = c :: E Word64
-     -- rules:
-     -- x ==. y   = (y, c+1)
-     -- c == 0    = (x, 1)
-     -- otherwise = (y, c-1)
 
 -- | Synchronous observer node; current prints probe values to console at
 -- phase 0.
@@ -152,6 +148,10 @@ observer = period observerPeriod
 -- Messages ------------------------------------------------------------
 
 type MsgType = Word64
+
+-- | Specially designated intended message to be send in the absense of faults
+goodMsg :: E MsgType
+goodMsg = Const 0
 
 -- | Special message type value indicating "no message present"
 missingMsgValue :: MsgType
@@ -181,32 +181,6 @@ tg nm i = nm ++ "_" ++ show i
 
 tg2 :: Name -> Int -> Int -> Name
 tg2 nm i j = nm ++ "_" ++ (show i) ++ "_" ++ (show j)
-
-
--- Variable Channels ---------------------------------------------------
-
-type VChannel a = Channel (V a)
-
-vchannel :: V a -> Atom (VChannel a)
-vchannel = channel
-
--- | Write the value of the held variable to the channel; sets 'hasData' to
--- True
-writeVChannel :: VChannel a -> Atom ()
-writeVChannel = writeChannel
-
--- | Read the channel if it has data available; sets 'hasData' to False
-readVChannel :: VChannel a -> Atom (E a)
-readVChannel c = value <$> readChannel c
-
--- | Read the channel without affecting its 'hasData' state
-obsVChannel :: VChannel a -> Atom (E a)
-obsVChannel (Channel var _) = return $ value var
-
--- | Update the value of the variable held by the channel
-updateVChannel :: Assign a => VChannel a -> E a -> Atom ()
-updateVChannel (Channel var _) expr = do
-  var <== expr
 
 
 -- Code Generator ------------------------------------------------------
