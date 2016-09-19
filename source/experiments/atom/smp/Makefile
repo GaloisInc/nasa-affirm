@@ -1,4 +1,4 @@
-ATOM_LOC := $(HOME)/git/atom
+ATOM_LOC := $(HOME)/galois/atom
 ATOM_SMP := .cabal-sandbox/bin/atom-smp
 
 all: smp
@@ -18,4 +18,5 @@ $(ATOM_SMP): AtomSMP.hs
 	cabal install
 
 clean:
-	rm smp smp.c smp.h
+	-rm smp smp.c smp.h *.o
+	-rm -rf .cabal-sandbox dist
