@@ -1,0 +1,67 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "debian/contrib-jessie64"
+  config.vm.provider "virtualbox" do |vb|
+     # Customize the amount of memory on the VM:
+     vb.memory = "1024"
+  end
+
+  # Support caching debian packages on the host
+  cache_dir = local_cache(config.vm.box)
+  config.vm.synced_folder cache_dir, "/var/cache/apt/archives/"
+
+  me = ENV["USER"]
+  config.vm.provision "shell", inline: <<-SHELL
+#!/bin/bash
+set -eux
+
+echo "You are: '#{me}'"
+sudo apt-get update
+
+# Basic dev tools
+sudo apt-get install -y                                     \\
+    vim-nox tmux python git zsh curl wget silversearcher-ag \\
+    ghc cabal-install                                       \\
+    build-essential autoconf libtool pkg-config
+
+# Install Yices2 & Sally dependencies
+sudo apt-get install -y                                          \\
+    g++ cmake default-jre gperf                                  \\
+    libgmp-dev libboost-program-options-dev                      \\
+    libboost-iostreams-dev libboost-test-dev libboost-thread-dev \\
+    libboost-system-dev
+
+# Install Yices 2
+YD="/home/vagrant/yices2"
+if [ ! -d "$YD/lib" ]; then
+  echo 'Building Yices...'
+  wget "http://yices.csl.sri.com/cgi-bin/yices2-newnewdownload.cgi?file=yices-2.3.1-src.tar.gz&accept=I+Agree" -O yices2.tar.gz
+  tar xzvf yices2.tar.gz
+  cd yices* && autoconf && ./configure --prefix="$YD" && make MODE=release && make MODE=release install && cd ..
+else
+  echo "Using cached Yices directory: $YD"
+fi
+
+# Install Sally
+if [ ! -d "/home/vagrant/sally" ]; then
+  echo 'Building Sally...'
+  git clone https://github.com/SRI-CSL/sally
+  cd sally/build
+  cmake .. -DYICES2_HOME="$YD"
+  make
+  make check
+else
+  echo 'Using cached Sally directory.'
+fi
+  SHELL
+end
+
+# Support caching of debian packages on the host
+def local_cache(basebox_name)
+  cache_dir = Vagrant::Environment.new.home_path.join('cache', 'apt', basebox_name)
+  partial_dir = cache_dir.join('partial')
+  partial_dir.mkdir unless partial_dir.exist?
+  cache_dir
+end
