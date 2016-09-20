@@ -1,0 +1,101 @@
+;; vi: set ft=scheme :
+;;
+;; Handwritten Sally model corresponding to atom-smp
+;;
+;; Model checking with Sally:
+;;
+;;     sally --engine bmc --bmc-check-deadlock atom-smp.mcmt
+;;     sally --engine ic3 atom-smp.mcmt
+
+;; ENUM for message values
+(define-constant missing_msg 0)
+(define-constant good_msg    1)
+
+;; State type
+(define-state-type state_type
+  ((channel_s2r       Real)
+   (channel_s2r_ready Bool)
+   (source!done       Bool)
+   (recv!vote         Real)
+   (recv!done         Bool))
+  ;; inputs
+  ((source!enable     Bool)
+   (recv!enable       Bool)))
+
+;; Initial states
+(define-states initial_state state_type
+  (and
+    (= channel_s2r missing_msg)
+    (not channel_s2r_ready)
+    (not source!done)
+    (not recv!done)
+    (= recv!vote missing_msg)))
+
+;; receiver transition
+(define-transition r0 state_type
+  (and state.channel_s2r_ready (not state.recv!done)
+    (and
+      ;; changes
+      (= next.recv!vote         state.channel_s2r)
+      (= next.recv!done         true)
+      ;; stays the same
+      (= next.channel_s2r       state.channel_s2r)
+      (= next.channel_s2r_ready state.channel_s2r_ready)
+      (= next.source!done       state.source!done))))
+
+;; source transition
+(define-transition r1 state_type
+  (and (not state.source!done)
+    (and
+      ;; stays the same
+      (= next.recv!vote         state.recv!vote)
+      (= next.recv!done         state.recv!done)
+      ;; changes
+      (= next.channel_s2r       good_msg)
+      (= next.channel_s2r_ready true)
+      (= next.source!done       true))))
+
+;; identity transition
+(define-transition id state_type
+  (and
+    (= next.recv!vote         state.recv!vote)
+    (= next.recv!done         state.recv!done)
+    (= next.channel_s2r       state.channel_s2r)
+    (= next.channel_s2r_ready state.channel_s2r_ready)
+    (= next.source!done       state.source!done)))
+
+;; enable transitions based on non-deterministic input
+(define-transition transition state_type
+  (or
+    (and input.source!enable (not input.recv!enable) (or r1 id))
+    (and (not input.source!enable) input.recv!enable r0 (or r0 id))
+    ;; stutter
+    (and (not input.source!enable) (not input.recv!enable) id)
+    (and input.source!enable input.recv!enable id)))
+
+
+;; Main transition system
+(define-transition-system T state_type
+  ;; initial states
+  initial_state
+
+  ;; transitions
+  transition)
+
+;; assume that one and only one enable condition is 'true'
+;; ?? input namespace isn't in scope here
+;;(assume T
+;;  (and
+;;    (or input.source!enable input.recv!enable)
+;;    (/= input.source!enable input.recv!enable)))
+
+;; source!done ^ recv!done ==> recv!vote = good_msg
+(query T
+  (=>
+    (and source!done recv!done)
+    (= recv!vote good_msg)))
+
+(query T
+  (=> source!done
+      (and channel_s2r_ready
+           (= channel_s2r good_msg))))
