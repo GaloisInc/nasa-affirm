@@ -18,6 +18,8 @@ Vagrant.configure(2) do |config|
 set -eux
 
 echo "You are: '#{me}'"
+VHOME=/home/vagrant
+
 sudo apt-get update
 
 # Basic dev tools
@@ -34,27 +36,31 @@ sudo apt-get install -y                                          \\
     libboost-system-dev
 
 # Install Yices 2
-YD="/home/vagrant/yices2"
+YD="$VHOME/yices2"
 if [ ! -d "$YD/lib" ]; then
   echo 'Building Yices...'
   wget "http://yices.csl.sri.com/cgi-bin/yices2-newnewdownload.cgi?file=yices-2.3.1-src.tar.gz&accept=I+Agree" -O yices2.tar.gz
   tar xzvf yices2.tar.gz
   cd yices* && autoconf && ./configure --prefix="$YD" && make MODE=release && make MODE=release install && cd ..
+  cd $VHOME
 else
   echo "Using cached Yices directory: $YD"
 fi
 
 # Install Sally
-if [ ! -d "/home/vagrant/sally" ]; then
+if [ ! -d "$VHOME/sally" ]; then
   echo 'Building Sally...'
   git clone https://github.com/SRI-CSL/sally
   cd sally/build
   cmake .. -DYICES2_HOME="$YD"
   make
   make check
+  cd $VHOME
 else
   echo 'Using cached Sally directory.'
 fi
+
+sudo chown -R vagrant:vagrant yices* sally
   SHELL
 end
 
