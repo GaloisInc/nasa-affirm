@@ -42,6 +42,7 @@ if [ ! -d "$YD/lib" ]; then
   wget "http://yices.csl.sri.com/cgi-bin/yices2-newnewdownload.cgi?file=yices-2.3.1-src.tar.gz&accept=I+Agree" -O yices2.tar.gz
   tar xzvf yices2.tar.gz
   cd yices* && autoconf && ./configure --prefix="$YD" && make MODE=release && make MODE=release install && cd ..
+  echo "export PATH=\\"$VHOME/yices2/bin:\\$PATH\\"" >> $VHOME/.bash_profile
   cd $VHOME
 else
   echo "Using cached Yices directory: $YD"
@@ -55,6 +56,7 @@ if [ ! -d "$VHOME/sally" ]; then
   cmake .. -DYICES2_HOME="$YD"
   make
   make check
+  echo "export PATH=\\"$VHOME/sally/build/src:\\$PATH\\"" >> $VHOME/.bash_profile
   cd $VHOME
 else
   echo 'Using cached Sally directory.'
