@@ -1,3 +1,4 @@
-om1
-om1.c
-om1.h
+.cabal-sandbox
+dist
+.cabal.sandbox.config
+smp
