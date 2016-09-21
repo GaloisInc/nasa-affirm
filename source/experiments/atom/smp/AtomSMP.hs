@@ -28,6 +28,9 @@ missingMsgValue = 0
 goodMsg :: E MsgType
 goodMsg = Const 1
 
+-- | Another good message
+goodMsg' :: E MsgType
+goodMsg' = Const 2
 
 -- SMP Spec ------------------------------------------------------------
 
@@ -35,7 +38,8 @@ goodMsg = Const 1
 smp :: Atom ()
 smp = do
   -- setup channel for communication between source and receiver
-  (s2rIn, s2rOut) <- channel "s2r" missingMsgValue
+  (s2rIn, s2rOut)   <- channel "s2r_1" missingMsgValue
+  (s2rIn', s2rOut') <- channel "s2r_2" missingMsgValue
 
   -- declare system nodes:
 
@@ -43,9 +47,10 @@ smp = do
   sysInit
 
   -- source:
-  source s2rIn
+  source s2rIn s2rIn'
   -- receiver:
-  recv s2rOut
+  recv "recv1" s2rOut
+  recv "recv2" s2rOut'
 
 
 -- Init ----------------------------------------------------------------
@@ -59,14 +64,16 @@ sysInit = period initPeriod . exactPhase 0 . atom "sysInit" $ do
 -- Source --------------------------------------------------------------
 
 -- | Source node
-source :: ChanInput  -- ^ channel input source will put messages on
+source :: ChanInput  -- ^ channel input source will put messages on for recv 1
+       -> ChanInput  -- ^ channel input source will put messages on for recv 1
        -> Atom ()
-source c = period sourcePeriod . atom "source" $ do
+source c c' = period sourcePeriod . atom "source" $ do
   done <- bool "done" False
   probe "source.done" (value done)
 
   cond $ not_ (value done)
-  writeChannel c goodMsg  -- send 'goodMsg' to receiver
+  writeChannel c  goodMsg  -- send 'goodMsg' to recv 1
+  writeChannel c' goodMsg' -- ditto for recv 2
   done <== Const True
 
   printAllProbes
@@ -74,13 +81,14 @@ source c = period sourcePeriod . atom "source" $ do
 -- Receiver -----------------------------------------------------------
 
 -- | Receiver node
-recv :: ChanOutput  -- ^ channel output that receiver listens to
+recv :: String      -- ^ name for the receiver
+     -> ChanOutput  -- ^ channel output that receiver listens to
      -> Atom ()
-recv c = period recvPeriod . atom "recv" $ do
+recv nm c = period recvPeriod . atom nm $ do
   done <- bool "done" False
-  probe "recv.done" (value done)
-  vote <- word64 "vote" missingMsgValue
-  probe "recv.vote" (value vote)
+  probe (nm ++ "_done") (value done)
+  vote <- word64 (nm ++ "_vote") missingMsgValue
+  probe (nm ++ "_vote") (value vote)
 
   condChannel c           -- execute only if channel 'c' has new message
   vote <== readChannel c  -- read message and assign to 'vote'

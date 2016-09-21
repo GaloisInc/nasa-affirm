@@ -17,47 +17,82 @@ static uint32_t __coverage[1] = {0};
 static uint32_t __coverage_index = 0;
 struct {  /* state */
   struct {  /* smp */
-    uint64_t __channel_s2r;
-    bool __channel_s2r_ready;
+    uint64_t __channel_s2r_1;
+    bool __channel_s2r_1_ready;
+    uint64_t __channel_s2r_2;
+    bool __channel_s2r_2_ready;
     struct {  /* source */
       bool done;
     } source;
-    struct {  /* recv */
+    struct {  /* recv1 */
       bool done;
-      uint64_t vote;
-    } recv;
+      uint64_t recv1_vote;
+    } recv1;
+    struct {  /* recv2 */
+      bool done;
+      uint64_t recv2_vote;
+    } recv2;
   } smp;
 } state =
 {  /* state */
   {  /* smp */
-    /* __channel_s2r */  0ULL,
-    /* __channel_s2r_ready */ false,
+    /* __channel_s2r_1 */  0ULL,
+    /* __channel_s2r_1_ready */ false,
+    /* __channel_s2r_2 */  0ULL,
+    /* __channel_s2r_2_ready */ false,
     {  /* source */
       /* done */  false
     },
-    {  /* recv */
+    {  /* recv1 */
       /* done */  false,
-      /* vote */  0ULL
+      /* recv1_vote */  0ULL
+    },
+    {  /* recv2 */
+      /* done */  false,
+      /* recv2_vote */  0ULL
     }
   }
 };
 
-/* smp.recv */
+/* smp.recv2 */
+static void __r2() {
+  bool __0 = true;
+  uint64_t __1 = state.smp.__channel_s2r_2;
+  uint64_t __2 = state.smp.recv2.recv2_vote;
+  bool __3 = state.smp.recv2.done;
+  uint64_t __4 = state.smp.recv1.recv1_vote;
+  bool __5 = state.smp.recv1.done;
+  bool __6 = state.smp.source.done;
+  if (state.smp.__channel_s2r_2_ready) {
+    if (__0) {
+      printf("recv2_vote: %i\n", __2);
+      printf("recv2_done: %i\n", __3);
+      printf("recv1_vote: %i\n", __4);
+      printf("recv1_done: %i\n", __5);
+      printf("source.done: %i\n", __6);
+      __coverage[0] = __coverage[0] | (1 << 2);
+    }
+  state.smp.recv2.recv2_vote = __1;
+  state.smp.recv2.done = __0;
+  }
+}
+
+/* smp.recv1 */
 static void __r1() {
   bool __0 = true;
-  uint64_t __1 = state.smp.__channel_s2r;
-  uint64_t __2 = state.smp.recv.vote;
-  bool __3 = state.smp.recv.done;
+  uint64_t __1 = state.smp.__channel_s2r_1;
+  uint64_t __2 = state.smp.recv1.recv1_vote;
+  bool __3 = state.smp.recv1.done;
   bool __4 = state.smp.source.done;
-  if (state.smp.__channel_s2r_ready) {
+  if (state.smp.__channel_s2r_1_ready) {
     if (__0) {
-    printf("recv.vote: %i\n", __2);
-    printf("recv.done: %i\n", __3);
-    printf("source.done: %i\n", __4);
+      printf("recv1_vote: %i\n", __2);
+      printf("recv1_done: %i\n", __3);
+      printf("source.done: %i\n", __4);
       __coverage[0] = __coverage[0] | (1 << 1);
     }
-  state.smp.recv.vote = __1;
-  state.smp.recv.done = __0;
+  state.smp.recv1.recv1_vote = __1;
+  state.smp.recv1.done = __0;
   }
 }
 
@@ -67,11 +102,14 @@ static void __r0() {
   bool __1 = ! __0;
   bool __2 = true;
   uint64_t __3 = 1ULL;
+  uint64_t __4 = 2ULL;
     if (__1) {
-    printf("source.done: %i\n", __0);
+      printf("source.done: %i\n", __0);
       __coverage[0] = __coverage[0] | (1 << 0);
-      state.smp.__channel_s2r = __3;
-      state.smp.__channel_s2r_ready = true;
+      state.smp.__channel_s2r_1 = __3;
+      state.smp.__channel_s2r_1_ready = true;
+      state.smp.__channel_s2r_2 = __4;
+      state.smp.__channel_s2r_2_ready = true;
     }
   state.smp.source.done = __2;
 }
@@ -87,7 +125,7 @@ void smp()
   {
     static uint8_t __scheduling_clock = 0;
     if (__scheduling_clock == 0) {
-      __assertion_checks(); __r1();  /* smp.recv */
+      __assertion_checks(); __r2();  /* smp.recv2 */
       __scheduling_clock = 4;
     }
     else {
@@ -96,6 +134,16 @@ void smp()
   }
   {
     static uint8_t __scheduling_clock = 1;
+    if (__scheduling_clock == 0) {
+      __assertion_checks(); __r1();  /* smp.recv1 */
+      __scheduling_clock = 4;
+    }
+    else {
+      __scheduling_clock = __scheduling_clock - 1;
+    }
+  }
+  {
+    static uint8_t __scheduling_clock = 2;
     if (__scheduling_clock == 0) {
       __assertion_checks(); __r0();  /* smp.source */
       __scheduling_clock = 4;
