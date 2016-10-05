@@ -1,8 +1,17 @@
 # atom-smp
 
-A specification in [Atom](https://github.com/tomahawkins/atom) (Haskell eDSL) for a
-concurrent simple message passing system. The system has two nodes. One node,
-the "source", sends a single message to another node, the "receiver".
+A specification in [Atom](https://github.com/tomahawkins/atom) (Haskell eDSL)
+for a concurrent (s)imple (m)essage (p)assing system, or 'smp'. The system has
+two nodes. One node, the "source", sends a single message to another node, the
+"receiver".
+
+```
+             ---> recv1
+            /
+    source <
+            \
+             ---> recv2
+```
 
 This repository contains the specification for 'smp' in `AtomSMP.hs` and the
 code for translating the spec to C and Sally in `Main.hs`.
