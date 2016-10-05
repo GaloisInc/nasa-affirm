@@ -1,11 +1,16 @@
 module AtomSMP
-  ( compileSMP )
+  ( compileSMPToC
+  , compileSMPToSally
+  )
 where
 
 import Control.Monad (forM_)
-import Data.Word
+import Data.Int
+import System.IO
 
-import Language.Atom
+import Language.Atom hiding (compile)
+import qualified Language.Atom as A
+import Language.Sally
 
 
 -- Parameters ----------------------------------------------------------
@@ -18,7 +23,7 @@ recvPeriod     = 5
 
 -- Messages ------------------------------------------------------------
 
-type MsgType = Word64
+type MsgType = Int64
 
 -- | Special message value indicating "no message present"
 missingMsgValue :: MsgType
@@ -87,7 +92,7 @@ recv :: String      -- ^ name for the receiver
 recv nm c = period recvPeriod . atom nm $ do
   done <- bool "done" False
   probe (nm ++ "_done") (value done)
-  vote <- word64 (nm ++ "_vote") missingMsgValue
+  vote <- int64 (nm ++ "_vote") missingMsgValue
   probe (nm ++ "_vote") (value vote)
 
   condChannel c           -- execute only if channel 'c' has new message
@@ -104,9 +109,9 @@ printAllProbes = mapM_ printProbe =<< probes
 
 -- | Invoke the atom compiler, generating 'om1.{c,h}'
 -- Also print out info on the generated schedule.
-compileSMP :: IO ()
-compileSMP = do
-  (sched, _, _, _, _) <- compile "smp" cfg smp
+compileSMPToC :: IO ()
+compileSMPToC = do
+  (sched, _, _, _, _) <- A.compile "smp" cfg smp
   putStrLn $ reportSchedule sched
   where
     cfg = defaults { cCode = prePostCode }
@@ -126,3 +131,16 @@ prePostCode _ _ _ =
             , "}"
             ]
   )
+
+
+-- Model Generator -------------------------------------------------------------
+
+compileSMPToSally :: String   -- ^ query string to append to model
+                  -> IO ()
+compileSMPToSally q = do
+  tr <- compile (nameFromS "smp") TrConfig smp
+  let fname = "smp.mcmt"
+  withFile fname WriteMode $ \h -> do
+    hPutSystem tr h
+    hPutStrLn h "\n;; Query"
+    hPutStrLn h q

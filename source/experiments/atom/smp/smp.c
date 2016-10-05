@@ -17,39 +17,39 @@ static uint32_t __coverage[1] = {0};
 static uint32_t __coverage_index = 0;
 struct {  /* state */
   struct {  /* smp */
-    uint64_t __channel_s2r_1;
+    int64_t __channel_s2r_1;
     bool __channel_s2r_1_ready;
-    uint64_t __channel_s2r_2;
+    int64_t __channel_s2r_2;
     bool __channel_s2r_2_ready;
     struct {  /* source */
       bool done;
     } source;
     struct {  /* recv1 */
       bool done;
-      uint64_t recv1_vote;
+      int64_t recv1_vote;
     } recv1;
     struct {  /* recv2 */
       bool done;
-      uint64_t recv2_vote;
+      int64_t recv2_vote;
     } recv2;
   } smp;
 } state =
 {  /* state */
   {  /* smp */
-    /* __channel_s2r_1 */  0ULL,
+    /* __channel_s2r_1 */  0LL,
     /* __channel_s2r_1_ready */ false,
-    /* __channel_s2r_2 */  0ULL,
+    /* __channel_s2r_2 */  0LL,
     /* __channel_s2r_2_ready */ false,
     {  /* source */
       /* done */  false
     },
     {  /* recv1 */
       /* done */  false,
-      /* recv1_vote */  0ULL
+      /* recv1_vote */  0LL
     },
     {  /* recv2 */
       /* done */  false,
-      /* recv2_vote */  0ULL
+      /* recv2_vote */  0LL
     }
   }
 };
@@ -57,10 +57,10 @@ struct {  /* state */
 /* smp.recv2 */
 static void __r2() {
   bool __0 = true;
-  uint64_t __1 = state.smp.__channel_s2r_2;
-  uint64_t __2 = state.smp.recv2.recv2_vote;
+  int64_t __1 = state.smp.__channel_s2r_2;
+  int64_t __2 = state.smp.recv2.recv2_vote;
   bool __3 = state.smp.recv2.done;
-  uint64_t __4 = state.smp.recv1.recv1_vote;
+  int64_t __4 = state.smp.recv1.recv1_vote;
   bool __5 = state.smp.recv1.done;
   bool __6 = state.smp.source.done;
   if (state.smp.__channel_s2r_2_ready) {
@@ -80,8 +80,8 @@ static void __r2() {
 /* smp.recv1 */
 static void __r1() {
   bool __0 = true;
-  uint64_t __1 = state.smp.__channel_s2r_1;
-  uint64_t __2 = state.smp.recv1.recv1_vote;
+  int64_t __1 = state.smp.__channel_s2r_1;
+  int64_t __2 = state.smp.recv1.recv1_vote;
   bool __3 = state.smp.recv1.done;
   bool __4 = state.smp.source.done;
   if (state.smp.__channel_s2r_1_ready) {
@@ -101,8 +101,8 @@ static void __r0() {
   bool __0 = state.smp.source.done;
   bool __1 = ! __0;
   bool __2 = true;
-  uint64_t __3 = 1ULL;
-  uint64_t __4 = 2ULL;
+  int64_t __3 = 1LL;
+  int64_t __4 = 2LL;
     if (__1) {
       printf("source.done: %i\n", __0);
       __coverage[0] = __coverage[0] | (1 << 0);
