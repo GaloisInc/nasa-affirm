@@ -160,5 +160,3 @@
  smp_state_type
  smp_initial_state
  smp_transition)
-;; Query
-;; NONE
