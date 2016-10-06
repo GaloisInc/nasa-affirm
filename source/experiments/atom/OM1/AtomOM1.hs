@@ -1,12 +1,13 @@
 module AtomOM1
-  ( compileOM1 )
+  ( om1
+  )
 where
 
 import Control.Monad (forM_)
-import Data.Word
+import Data.Int
 
 import Language.Atom
-
+import Language.Sally
 
 -- Parameters ----------------------------------------------------------
 
@@ -27,9 +28,6 @@ recvSet  = [0..numRecvs-1]
 
 -- OM(1) Spec ------------------------------------------------------------
 
-newChannel :: String -> Atom (ChanInput, ChanOutput)
-newChannel = flip channel missingMsgValue
-
 -- | Top level rule
 om1 :: Atom ()
 om1 = do
@@ -38,7 +36,6 @@ om1 = do
   r2rs <- mapM (mapM newChannel) [ [ tg2 "r2r" i j | j <- recvSet ]
                                                    | i <- relaySet ]
   votes <- mapM msgVar [ tg "vote" j | j <- recvSet ]
-
 
   -- declare source node
   source (map fst s2rs)
@@ -59,23 +56,25 @@ om1 = do
 
 -- Source --------------------------------------------------------------
 
--- | Source node ("General")
-source :: [ChanInput]  -- ^ output channels
+-- | Source node, a.k.a. "The General"
+source :: [ChanInput]  -- ^ output channels to broadcast on
        -> Atom ()
 source cs = period sourcePeriod
           . atom "source" $ do
   done <- bool "done" False
+
+  -- activation condition
   cond $ not_ (value done)
 
+  -- behavior
+  done <== Const True
   forM_ cs $ \c -> do
     writeChannel c goodMsg
-
-  done <== Const True
 
 
 -- Relays --------------------------------------------------------------
 
--- | Relay node ("Lieutenant")
+-- | Relay node, a.k.a. a generic 0th round "Lieutenant"
 relay :: Int          -- ^ relay id
       -> ChanOutput   -- ^ channel from source
       -> [ChanInput]  -- ^ channels to receivers
@@ -84,20 +83,23 @@ relay ident inC outCs = period relayPeriod
                       . atom (tg "relay"  ident) $ do
   done <- bool "done" False
   msg  <- msgVar (tg "relay_msg" ident)
+
+  -- activation condition
   cond $ isMissing msg  -- we haven't stored a value yet
   condChannel inC       -- there is a value available
 
+  -- behavior
   msg  <== readChannel inC
+  done <== Const True
   forM_ outCs $ \c -> do
     let m = readChannel inC :: E MsgType
     writeChannel c m
-  done <== Const True
 
 
 -- Receivers -----------------------------------------------------------
 
--- | Receiver node ("Lieutenant")
-recv :: Int  -- ^ receiver id
+-- | Receiver node, a.k.a. a generic 1st round "Lieutenant"
+recv :: Int           -- ^ receiver id
      -> [ChanOutput]  -- ^ channels from relays
      -> V MsgType
      -> Atom ()
@@ -106,12 +108,14 @@ recv ident inCs vote = period recvPeriod
   done <- bool "done" False
   buffer <- mapM msgVar [ tg (tg "buffer" ident) i | i <- relaySet ]
 
+  -- declare multiple "pollers", one for each buffer location
   forM_ relaySet $ \i -> do
     atom (tg2 "recv_poll" ident i) $ do
       cond $ isMissing (buffer !! i)
       condChannel (inCs !! i)
       (buffer !! i) <== readChannel (inCs !! i)
 
+  -- declare a voter
   atom (tg "recv_vote" ident) $ do
     cond $ all_ (not_ . isMissing) buffer
     vote <== computeVote (value <$> buffer)
@@ -126,17 +130,18 @@ computeVote = fst . foldr iter (missingMsgValueE, Const 0)
                     , mux (x ==. y) onTrue2 onFalse2)
       where
         -- rules:
-        -- x ==. y   = (y, c+1)
-        -- c == 0    = (x, 1)
-        -- otherwise = (y, c-1)
+        --   if x ==. y, then     (y, c+1)
+        --   else if c == 0, then (x, 1)
+        --   else                 (y, c-1)
         onTrue1       = y
         onTrue2       = c + (Const 1)
         onFalse1      = mux (c ==. Const 0) x y
         onFalse2      = mux (c ==. Const 0) (Const 1) (c - (Const 1))
-        _             = c :: E Word64
+        _             = c :: E Int64
 
 -- | Synchronous observer node; current prints probe values to console at
--- phase 0.
+-- phase 0. This node has no activation or behavior so its part in the model
+-- is trivial.
 observer :: Atom ()
 observer = period observerPeriod
          . exactPhase 0
@@ -144,10 +149,10 @@ observer = period observerPeriod
   ps <- probes
   mapM_ printProbe ps
 
-
+-- Miscellaneous helper functions and definittions ---------------------
 -- Messages ------------------------------------------------------------
 
-type MsgType = Word64
+type MsgType = Int64
 
 -- | Specially designated intended message to be send in the absense of faults
 goodMsg :: E MsgType
@@ -163,6 +168,10 @@ missingMsgValueE = Const 0
 isMissing :: V MsgType -> E Bool
 isMissing = (==. missingMsgValueE) . value
 
+-- | Declare a new channel with 'missingMsgValue' as its initial value
+newChannel :: String -> Atom (ChanInput, ChanOutput)
+newChannel = flip channel missingMsgValue
+
 -- | Declare a variable of message type and add a probe for it to the
 -- environment
 msgVar :: Name -> Atom (V MsgType)
@@ -173,39 +182,12 @@ msgVar nm = do
 
 -- | Declare a message variable w/o adding a probe
 msgVar' :: Name -> Atom (V MsgType)
-msgVar' nm = word64 nm missingMsgValue
+msgVar' nm = int64 nm missingMsgValue
 
 -- | Tag a name with an ID
 tg :: Name -> Int -> Name
 tg nm i = nm ++ "_" ++ show i
 
+-- | Tag a name with a pair of IDs
 tg2 :: Name -> Int -> Int -> Name
 tg2 nm i j = nm ++ "_" ++ (show i) ++ "_" ++ (show j)
-
-
--- Code Generator ------------------------------------------------------
-
--- | Invoke the atom compiler, generating 'om1.{c,h}'
--- Also print out info on the generated schedule.
-compileOM1 :: IO ()
-compileOM1 = do
-  (sched, _, _, _, _) <- compile "om1" cfg om1
-  putStrLn $ reportSchedule sched
-  where
-    cfg = defaults { cCode = prePostCode }
-
--- | Custom pre-post code for generated C
-prePostCode :: [Name] -> [Name] -> [(Name, Type)] -> (String, String)
-prePostCode _ _ _ =
-  ( unlines [ "#include <stdio.h>"
-            , "#include <unistd.h>"
-            , ""
-            , "// ---- BEGIN of source automatically generated by Atom ----"
-            ]
-  , unlines [ "// ---- END of source automatically generated by Atom ----"
-            , ""
-            , "int main(int argc, char **argv) {"
-            , "  while(1) { om1(); usleep(500); }"
-            , "}"
-            ]
-  )

@@ -1,5 +1,5 @@
 name:                atom-om1
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            OM1 in atom
 author:              Benjamin Jones
 maintainer:          bjones@galois.com
@@ -7,13 +7,15 @@ category:            Language
 build-type:          Simple
 cabal-version:       >=1.10
 
-extra-source-files:  generated/om1.h
-                   , generated/om1.c
+extra-source-files:  om1.h
+                   , om1.c
+                   , om1.mcmt
 
 executable atom-om1
   main-is:             Main.hs
   other-modules:       AtomOM1
-  build-depends:
-    base >= 4.8    && < 4.9,
-    atom >= 1.0.13 && < 2
+  build-depends:       base >= 4.8   && < 4.10
+                     , atom >= 1.1.0 && < 2
+                     , atom-sally >= 0.1.0.0
+
   default-language:    Haskell2010
