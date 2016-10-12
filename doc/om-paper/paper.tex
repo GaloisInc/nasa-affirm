@@ -1,4 +1,5 @@
-\documentclass{IEEEtran/IEEEtran}
+%\documentclass{IEEEtran/IEEEtran}
+\documentclass{llncs/llncs}
 
 \usepackage{ifthen}
 \usepackage{xcolor}
@@ -7,9 +8,10 @@
 \usepackage{amssymb}
 \usepackage{amsfonts}
 
-\newtheorem{definition}{Definition}
-\newtheorem{theorem}{Theorem}
-\newtheorem{lemma}{Lemma}
+%% IEEE
+%% \newtheorem{definition}{Definition}
+%% \newtheorem{theorem}{Theorem}
+%% \newtheorem{lemma}{Lemma}
 
 \newboolean{submission}  %set to true for the submission version
 \setboolean{submission}{false}
@@ -44,21 +46,19 @@
 
 \section{Introduction}
 
-Fault-tolerant distributed systems are essential to reliable life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
+Fault-tolerant distributed systems are the backbone of reliable life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
 
-There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Most of this work uses interactive theorem-proving~\cite{}. Interactive theorem-proving is useful in the domain because of the complexity of the models; automated methods are difficult to scale. However, two problems with interactive verification are that it requires specialized expertise and it is labor intensive.
+There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Most of this work uses interactive theorem-proving~\cite{}. Interactive theorem-proving is useful in the domain because of the complexity of the models and because distributed system verification is typically parameterized by the number of nodes; automated methods perform poorly along these two metrics. However, two problems with interactive verification are that it requires specialized expertise and it is labor intensive.
 
 In contrast, model-checking is automated but has limited scalability. To address scalability, abstractions and optimizations are employed, both of which lead to problems.
 
-Verification abstractions are often ad-hoc and system-specific. For example, to model a process that can broadcast the values $\{0, 1\}$, or no value when faulty, one might define an enumerated type of broadcast values sent such as
+For example, verification abstractions are often ad-hoc and system-specific. For example, to model a process that can broadcast the values $\{0, 1\}$, or no value when faulty, one might define an enumerated type of broadcast values sent such as
 
 $$\{0, 1, NONE\}$$
 
 However, the enumeration conflates environment artifacts (i.e., faults) and system artifacts. Conflating them makes formal model-to-code correspondence more difficult to achieve. An example of a verification optimization is to model message passing as shared state between processes. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
 
-Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems in which verification is more automated than in traditional interactive theorem-proving.
-
-We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{Dutertre-Sorea}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
+Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems in which verification is more automated than in traditional interactive theorem-proving. We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{Dutertre-Sorea}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
 
 The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to impose fault model constraints on the system. Doing so makes the fault-model compositional with the system and easy to modify. We also use synchronous observers to observe safety properties, eliding the need for complex linear temporal logic specifications. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
 
@@ -91,18 +91,30 @@ Let a transition system $\mathcal{M} = (S, I, \rightarrow)$, be a set of states 
 The following laws must hold of a transition system $\mathcal{M}$ implementing a calendar automaton:
 
 \begin{enumerate}
-\item Time is initialized to be less than or equal to every calendar timeout: $\forall \sigma \in I, \, \forall (e_i, t_i) \in \sigma(cal)$, $\sigma(now) \leq t_i$.
+\item \label{cal:a} Time is initialized to be less than or equal to every calendar timeout: $\forall \sigma \in I$, $\forall (e_i, t_i) \in \sigma(cal)$, $\sigma(now) \leq t_i$.
 
-\item In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S \, \forall (e_i, t_i) \in \sigma(cal)$, $t_i \geq \sigma(now)$.
+%% \item \label{cal:b} In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S$, $(e_i, t_i) \in \sigma(cal)$, $t_i \geq \sigma(now)$.
 
-\item In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S, \, \forall (e_i, t_i) \in \sigma(cal)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := min(c)]$.
+\item \label{cal:c} In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S$, $\forall (e_i, t_i) \in \sigma(cal)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := min(c)]$.
 
-\item In all states, if the current time equals a timeout, then the only transition enabled is a calendar event update associated with the timeout: $\forall \sigma \in S, \, \exists (e_i, t_i) \in \sigma(cal)$ such that $\sigma(now) = t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma'(now) = \sigma(now)$, $\sigma'(c_j) = \sigma(c_j)$ for all $c_j \in \sigma(c)$ such that $c_j \neq c_i$, and $\sigma'(t_i) > \sigma(t_i)$.
+\item \label{cal:d} In all states, if the current time equals a timeout, then the only transition enabled is a calendar event update associated with the timeout: $\forall \sigma \in S$, $\exists (e_i, t_i) \in \sigma(cal)$ such that $\sigma(now) = t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma'(now) = \sigma(now)$, $\sigma'(c_j) = \sigma(c_j)$ for all $c_j \in \sigma(c)$ such that $c_j \neq c_i$, and $\sigma'(t_i) > \sigma(t_i)$.
 \end{enumerate}
 
+We prove some intermediate results from the laws. First, in every state, the timeouts are never in the past:
+\begin{lemma}[Future timeouts]\label{lem:ft}
+$\forall \sigma \in S$, $(e_i, t_i) \in \sigma(cal)$, $\sigma(now) \leq t_i$.
+\end{lemma}
+\begin{proof}
+By induction on states. In an initial state, the property holds immediately (Law~\ref{cal:a}). In the induction step, suppose $\sigma(now) \leq t_i$, for all $t_i$. If $\sigma(now) < t_i$, for all $t_i$, then the only possible transition is a time progress update to the minimum timeout (Law~\ref{cal:c}). Otherwise, if $\sigma(now) = t_i$, for some $t_i$, then the only possible transition is a calendar event update, incrementing $t_i$ but not $\sigma(now)$ (Law~\ref{cal:d}).
+\end{proof}
+
+Second, we prove that time is monotonic:
 \begin{lemma}[Monotonic time]
 $\forall \sigma, \sigma' \in S$, if $\sigma \rightarrow \sigma'$, then $\sigma'(now) \geq \sigma(now)$.
 \end{lemma}
+\begin{proof}
+From Lemma~\ref{lem:ft}, in $\sigma(now) \leq t_i$, for all $(e_i, t_i) \in \sigma(cal)$. For any $\sigma'$ such that $\sigma \rightarrow \sigma'$, either there is a time progress update (Law~\ref{cal:c}) or a calendar event update (Law~\ref{cal:d}). In the first case, $\sigma(now) < \sigma'(now)$, and in the second case, $\sigma(now) = \sigma'(now)$.
+\end{proof}
 
 In a distributed system, it is convenient to distinguish global actions and local actions. Global actions are principally interprocess communication, while local actions are those carried out by each process to update its local state and produce new messages to broadcast. While both global and local actions can both be modeled as events in a calendar automata, doing so is generally overkill and complicates the model. From the global perspective, individual processes can update their local state atomically.
 
@@ -127,33 +139,33 @@ The event of receiving a message initiates a process to update its local state m
 Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables. Synchronous observers are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the domain~\cite{}. The general form for specifying synchronous observers is the following:
 $$system | assumptions | requirements$$
 \noindent
-where `$|$' denotes synchronous composition of state machines. The assumptions constrain the system's state variables, while the requirements monitor the system's state variables. 
+where `$|$' denotes synchronous composition of transition systems. The assumptions constrain the system's state variables, while the requirements monitor the system's state variables. More formally, define a transition subset relation:
 
-The benefit of the synchronous observer approach is that we can develop a system specification that contains no extraneous modeling context from which to synthesize an implementation. For example, we do not want synthesize an implementation that injects faults! Furthermore, modifying assumptions and requirements is simpler when they are not distributed throughout the model.
+\begin{definition}[Transition system subset]
+For transition systems $M = (S, I, \rightarrow)$ and $M' = (S', I', \rightarrow')$, $M \subseteq M'$ if and only if $S \subseteq S'$, $I \subseteq I'$, and $\rightarrow \subseteq \rightarrow'$.
+\end{definition}
 
-%% As a simple example, consider the following transition system. In the following, \texttt{'} denotes the next-state value of a variable, and texttt{-->} is a two-place operator, preceded by a guard, such that if the guard is true, the state update following the arrow is applied. One transition with a true guard is nondeterministically applied.
+Let the system, assumptions, and requirements each be the transition systems $\mathcal{S}$, $\mathcal{A}$, and $\mathcal{R}$, respectively. Then we require $A \subseteq S$. If the system is \emph{realizable}~\cite{} under its assumptions, then the set of states, initial states, and transition relation of $A$ are all nonempty. A system is \emph{correct} if $\mathcal{S} \subseteq \mathcal{R}$.
 
-%% \begin{verbatim}
-%% system:
-%%   initialization: i = 0, b = True
-%%   transitions:
-%%     b == True  --> i' = i+2, b' = False
-%%     b == False --> i' = i-1, b' = True
-%% \end{verbatim}
-
-%% The linear temporal logic (LTL) property \texttt{G(i >= 0)} holds for this system. Let us define a requirements transition system to check the same property:
-
-%% \begin{verbatim}
-%% requirements:
-%%   initialization: nonneg = True
-%%   transitions:
-%%     i >= 0 -->
-%% \end{verbatim}
+The benefit of the synchronous observer approach is that we can develop a system specification that contains no extraneous modeling context from which to synthesize an implementation. For example, we do not want to synthesize an implementation that injects faults! Furthermore, modifying assumptions and requirements is simpler when they are not distributed throughout the model.
 
 
-\subsection{Property Observer}
 
-\lee{todo}
+
+
+% ------------------------------------------------------------
+\subsection{Abstract State Machines}\label{sec:abstract}\label{sec:asms}
+When model-checking a system, counterexamples to properties are traces of states. A state is a collection of variable values, and in large models, there are a lot. A single state includes assignments to each of the variables, and counterexample trace may be many 10s of states in length. In practice, counterexamples depend on a small number of state variables. The user has to manually separate the state variables that matter from those that do not for a specific property. It is not enough prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when model-checking models that have sufficient detail for implementation synthesis, as is the goal in our work.
+
+Systems are usually designed in modes such that predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
+
+Our solution to the problem of constructing a mode-based state machine uses abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize the Church-Turing thesis for abstract data structures~\cite{}. Since then, ASMs have become an engineering technique for simulating a system at different levels of abstraction.
+
+\lee{http://www2.informatik.hu-berlin.de/sam/preprint/reisig203.pdf}
+More precisely, we implement a sequential small-step ASM~\cite{}.
+\begin{definition}[Sequential small-step ASM]
+Let $V$ be a finite set of state variables. Let $s$ be an assignment of variables to values, and let $b$ be a relation Å
+\end{definition}
 
 % ------------------------------------------------------------
 \section{The Synchronous Kibitzer}\label{sec:kibitzer}
@@ -184,7 +196,7 @@ With this machinery, we can define the semantics of faults by constraining the r
 \begin{align*}
 &nonfaulty\_constraint =\\
   &\quad \forall i, j \in Id, t \in \mathbb{R}.\\
-  &\quad\quad (faults(i) = none\\
+  &\quad\quad faults(i) = none\\
   &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = send(i, j, t)
 \end{align*}
 \noindent
@@ -199,28 +211,14 @@ For symmetric faults, we there is no requirement that the messages sent are the 
 Byzantine faults are left completely unconstrained.
 
 % ------------------------------------------------------------
-\section{Abstract State Machines}\label{sec:abstract}\label{sec:asms}
-When model-checking a system, counterexamples to properties are traces of states. A state is a collection of variable values. For industrial-scale models, there are many 10s or even 100s of state variables. So a single state includes assignments to each of the variables, and counterexample trace may be many 10s of states in length. In practice, counterexamples depend on a small number of state variables. The user has to manually separate the state variables that matter from those that do not for a specific property. It is not enough prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when model-checking models that have sufficient detail for implementation synthesis, as is the goal in our work.
-
-Systems are usually designed in modes such predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
-
-Our solution to the problem of constructing a mode-based state machine uses abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize the Church-Turing thesis for abstract data structures~\cite{}. Since then, ASMs have become an engineering technique for simulating a system at different levels of abstraction.
-
-\lee{http://www2.informatik.hu-berlin.de/sam/preprint/reisig203.pdf}
-More precisely, we implement a sequential small-step ASM~\cite{}.
-\begin{definition}[Sequential small-step ASM]
-Let $V$ be a finite set of state variables. Let $s$ be an assignment of variables to values, and let $b$ be a relation Å
-\end{definition}
-
-
-
-% ------------------------------------------------------------
 \section{An Extended Example: Byzantine Agreement}\label{sec:byz}
 
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
 
 \lee{let's also check out scalability when we ``turn off'' faults. Also, how hard is it to turn them off or change the fault model? E.g., how many lines of spec need to be changed? Compare to rushby's?}
+
+
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
