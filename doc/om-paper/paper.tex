@@ -33,7 +33,7 @@
 
 \begin{document}
 
-\title{Towards Systematic Specification and Verification of Fault-Tolerant Protocols}
+\title{Systematic Specification for Scalable Verification of Fault-Tolerant Algorithms}
 \author{Ben and Lee}
 
 
@@ -46,7 +46,7 @@
 
 \section{Introduction}
 
-Fault-tolerant distributed systems are the backbone of reliable life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove correctness.
+Fault-tolerant distributed systems are the backbone of reliable life-critical systems, like avionics. Consequently, this class of systems demand high-assurance of correct design and implementation. Formal verification can be used to prove the correctness of their designs.
 
 There is substantial literature on verifying fault-tolerant distributed systems~\cite{}. Most of this work uses interactive theorem-proving~\cite{}. Interactive theorem-proving is useful in the domain because of the complexity of the models and because distributed system verification is typically parameterized by the number of nodes; automated methods perform poorly along these two metrics. However, two problems with interactive verification are that it requires specialized expertise and it is labor intensive.
 
@@ -56,11 +56,13 @@ For example, verification abstractions are often ad-hoc and system-specific. For
 
 $$\{0, 1, NONE\}$$
 
-However, the enumeration conflates environment artifacts (i.e., faults) and system artifacts. Conflating them makes formal model-to-code correspondence more difficult to achieve. An example of a verification optimization is to model message passing as shared state between processes. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
+However, the enumeration conflates environmental artifacts (i.e., faults) and system artifacts (i.e., the non-faulty broadcast values). Conflating them makes formal model-to-code correspondence more difficult to achieve.
+
+An example of a verification optimization is to model message passing as shared state between processes to reduce the number of state variables in the model, since the message passing mechanism is elided. While these optimizations might be safe under particular assumptions, they can lead to unsound models when a system or its environment is modified.
 
 Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems in which verification is more automated than in traditional interactive theorem-proving. We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{Dutertre-Sorea}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
 
-The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to impose fault model constraints on the system. Doing so makes the fault-model compositional with the system and easy to modify. We also use synchronous observers to observe safety properties, eliding the need for complex linear temporal logic specifications. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
+The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to compose distinct transition systems modeling the system, environment, assumptions, and requirements. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
 
 We validate the model with a number of small examples \lee{todo}, as well as an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between processes---it is the most scalable model-checking verification of the protocol.
 
@@ -136,22 +138,64 @@ The event of receiving a message initiates a process to update its local state m
 \lee{note that we don't need full generality of send and receive events in OM(1)}
 
 \subsection{Synchronous Observers}\label{sec:sync}
-Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables. Synchronous observers are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the domain~\cite{}. The general form for specifying synchronous observers is the following:
-$$system | assumptions | requirements$$
+Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables. Synchronous observers are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the domain~\cite{}. The general form for specifying a system using synchronous observers is the following:
+$$\mathcal{S} | \mathcal{E} | \mathcal{A} | \mathcal{R}$$
 \noindent
-where `$|$' denotes synchronous composition of transition systems. The assumptions constrain the system's state variables, while the requirements monitor the system's state variables. More formally, define a transition subset relation:
+where `$|$' denotes synchronous composition of transition systems. $\mathcal{S}$ is the \emph{system}, or machine to be realized in an implementation. $\mathcal{E}$ is the \emph{environment} in which the system operates. For example, the environment can be used to specify the behavior of faults in the system. $\mathcal{A}$ are the \emph{assumptions} on the system, and $\mathcal{R}$ are the \emph{requirements}. Synchronous observers can be thought of as a generalization of state predicates,like Hoare triples~\cite{}, to transitions systems.
 
-\begin{definition}[Transition system subset]
-For transition systems $M = (S, I, \rightarrow)$ and $M' = (S', I', \rightarrow')$, $M \subseteq M'$ if and only if $S \subseteq S'$, $I \subseteq I'$, and $\rightarrow \subseteq \rightarrow'$.
+To give a more precise treatment, we introduce some definitions.
+
+\begin{definition}[Consistent states]
+  States $s, s'$ are consistent iff for every assignment $(x = v) \in s$ and $(x' =
+  v') \in s'$, $x \neq x'$ or $v = v'$.
 \end{definition}
 
-Let the system, assumptions, and requirements each be the transition systems $\mathcal{S}$, $\mathcal{A}$, and $\mathcal{R}$, respectively. Then we require $A \subseteq S$. If the system is \emph{realizable}~\cite{} under its assumptions, then the set of states, initial states, and transition relation of $A$ are all nonempty. A system is \emph{correct} if $\mathcal{S} \subseteq \mathcal{R}$.
+\begin{definition}[Reachable]
+For a transition relation $\rightarrow$ over the states of $S$, for states $s_0, s_1, \ldots, s_k \in S$, $s_k$ is reachable from $s_0$ iff
+$$s_0 \rightarrow s_1 \rightarrow \ldots \rightarrow s_k$$
+\end{definition}
+\noindent
+In particular, a state $s$ is reachable from $s$.
 
-The benefit of the synchronous observer approach is that we can develop a system specification that contains no extraneous modeling context from which to synthesize an implementation. For example, we do not want to synthesize an implementation that injects faults! Furthermore, modifying assumptions and requirements is simpler when they are not distributed throughout the model.
+In the following definitions, let
+$M = (S, I, \rightarrow)$
+and
+$M' = (S', I', \rightarrow')$
+be transitions systems.
 
+\begin{definition}[Deadlock]
+$M$ is deadlocked iff either the set of initial states $I$ is empty, or there exists a state $s_0 \in S$ and state $s_1 \in I$ such that $s_0$ is reachable from $s_1$ and there exists no $s_2 \in S$ such that $s_0 \rightarrow s_2$.
+\end{definition}
 
+%% \begin{definition}[Transition system union]
+%% %% $M \cup M' = (S \cup S', I \cup I', \rightarrow_{M|M'})$ where $\rightarrow_{M|M'}$ is the smallest relation such that $(s,s') \in \rightarrow_{M|M'}$ iff 
+%% \end{definition}
 
+In defining the synchronous composition of two transition systems, we allow the possibility that composing two states can lead to inconsistent states (as opposed to the semantics in which composition of states $s_0$ and $s_1$ is the ordered pair $(s_0, s_1)$).
 
+\begin{definition}[Synchronous composition]
+The synchronous composition of $M$ and $M'$ is a transition system
+$$M | M' = (S_{M | M'}, I_{M | M'}, \rightarrow_{M | M'})$$
+\noindent
+such that $S_{M | M'} = S \cup S'$,
+$$I_{M | M'} = \{ s_I \cup s_{I'} | s_I \in I\textnormal{, }s_{I'} \in I'\textnormal{, and } s_I \textnormal{ and } s_{I'}\textnormal{ are consistent}\}$$
+\noindent
+and for $s, s' \in S_{M | M'}$, $s \rightarrow_{M | M'} s'$ iff
+\begin{itemize}
+\item there exist states $s_M, s'_M \in S$ such that $s_M \rightarrow s'_M$, $s_M \subseteq s$, and $s'_M \subseteq s'$,
+\item there exist states $s_{M'}, s'_{M'} \in S'$ such that $s_{M'} \rightarrow s'_{M'}$, $s_{M'} \subseteq s$, and $s'_{M'} \subseteq s'$,
+\item $s_M$ and $s_{M'}$ are consistent,
+\item and $s'_M$ and $s'_{M'}$ are consistent.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[Transition system refinement]
+$M \subseteq M'$ if and only if $S \subseteq S'$, $I \subseteq I'$, and $\rightarrow \subseteq \rightarrow'$.
+\end{definition}
+
+By convention, the assumptions $\mathcal{A}$ should be a refinement of the system $\mathcal{S}$ and environment $\mathcal{E}$. The system is \emph{realizable}~\cite{} under its assumptions if $\mathcal{S} | \mathcal{E} | \mathcal{A}$ is not deadlocked. A system is \emph{correct} if $\mathcal{S} | \mathcal{E} | \mathcal{A}$ refines the requirements $\mathcal{R}$.
+
+There are two practical benefits of the synchronous observer approach. First, the system $\mathcal{S}$ contains no extraneous modeling context about the environment, assumptions, or requirements, making it easier to decompose $\mathcal{S}$ and to synthesize an implementation directly from it. Second, as described by Rushby~\cite{}, specifying requirements is simpler.
 
 % ------------------------------------------------------------
 \subsection{Abstract State Machines}\label{sec:abstract}\label{sec:asms}
@@ -211,7 +255,7 @@ For symmetric faults, we there is no requirement that the messages sent are the 
 Byzantine faults are left completely unconstrained.
 
 % ------------------------------------------------------------
-\section{An Extended Example: Byzantine Agreement}\label{sec:byz}
+\section{Extended Example: OM(1)}\label{sec:byz}
 
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
