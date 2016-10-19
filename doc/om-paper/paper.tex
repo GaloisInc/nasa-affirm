@@ -4,6 +4,8 @@
 \usepackage{ifthen}
 \usepackage{xcolor}
 
+\usepackage{graphicx}
+
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{amsfonts}
@@ -257,12 +259,44 @@ Byzantine faults are left completely unconstrained.
 % ------------------------------------------------------------
 \section{Extended Example: OM(1)}\label{sec:byz}
 
+We have instantiated the formal model described above to model and verify the classic OM(1) Byzantine fault-tolerant algorithm~\cite{}. OM(1) and its variants have been verified in other settings, allowing us to benchmark our results against others (see Section~\ref{sec:experimental} for experimental results).
+
+The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use the infinite-state model-checker using $k$-induction~\cite{}.
+
+\subsection{OM(1) Overview}
+
+\subsection{Model Sketch}
+
+\subsection{Invariants}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=8cm]{figs/proof-structure-validity}
+  \caption{Proof structure for the validity property.}
+  \label{fig:compare}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=8cm]{figs/proof-structure-agreement}
+  \caption{Proof structure for the agreement property.}
+  \label{fig:compare}
+\end{figure}
+
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
 
 \lee{let's also check out scalability when we ``turn off'' faults. Also, how hard is it to turn them off or change the fault model? E.g., how many lines of spec need to be changed? Compare to rushby's?}
 
+\begin{figure}
+  \centering
+  \includegraphics[width=8cm]{figs/benchmark}
+  \caption{Comparison of number of nodes vs. verification time.}
+  \label{fig:compare}
+\end{figure}
 
+% ------------------------------------------------------------
+\section{Toward an Architectural Domain-Specific Language}\label{sec:adsl}
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
