@@ -10,6 +10,9 @@
 \usepackage{amssymb}
 \usepackage{amsfonts}
 
+\usepackage{tikz}
+\newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}}
+
 %% IEEE
 %% \newtheorem{definition}{Definition}
 %% \newtheorem{theorem}{Theorem}
@@ -68,7 +71,7 @@ The model also employs \emph{synchronous observers}~\cite{}. Synchronous observe
 
 We validate the model with a number of small examples \lee{todo}, as well as an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between processes---it is the most scalable model-checking verification of the protocol.
 
-\lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking}
+\lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking: will need user-provided lemmas. compositional approach to providing lemmas }
 
  %% Timed automata are an alternative to the \emph{timed automata} formalism~\cite{}, as implemented in model-checkers like UPPAAL~\cite{} and Kronos~\cite{}.
 
@@ -77,7 +80,7 @@ We validate the model with a number of small examples \lee{todo}, as well as an 
 \section{Formal Model}\label{sec:model}
 Here we describe our formal model specialized for fault-tolerant distributed systems. There are three principal abstractions we describe: calendar automata, synchronous observers, and abstract state machines; we describe each below.
 
-\subsection{Calendar Automata}\label{sec:calendar}\label{sec:calendar}
+\subsection{Calendar Automata}\label{sec:calendar}
 \emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{}. Timed automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks} in a solver. Timed automata model-checkers are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks. Modern general-purpose model-checkers like \lee{name some} use SMT solvers for general infinite-state system verification that is not limited to real-time clocks.
 
 However, real-time system verification in general-purpose model-checkers requires an explicit formalism of real-time progression. Trying to encode real-time clocks directly is difficult; in particular, one must avoid Zeno's paradox in which no progress is made because state transitions simply update real-valued variables by an infinitesimally small amount~\cite{bruno,lamport}. To avoid this problem, Dutetre and Sorea developed \emph{calendar automata}~\cite{bruno}, which is itself inspired by event calendars used in discrete-event simulation.
@@ -264,6 +267,92 @@ We have instantiated the formal model described above to model and verify the cl
 The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use the infinite-state model-checker using $k$-induction~\cite{}.
 
 \subsection{OM(1) Overview}
+Our first case is the ``Oral Messages'' algorithm to solve the Byzantine
+Generals Problem~\cite{Lamport-OM}. The algorithm, $\OM{m}$, is parameterized by
+the number of rounds of message relay. Here, we focus on Oral Messages with one
+round of communication, $\OM{1}$, that tolerates a single Byzantine fault, so
+long as there are a sufficient number of nodes nodes.
+
+Figure~\ref{fig:om1} depicts the communication pattern for \OM{1}. Each of the
+$n$ nodes in the system represents a (Byzantine) General. In this formulation, the
+center node is the commanding general, while the $n-1$ outer generals are the
+lieutenants. The algorithm starts with the commanding general sending each
+lieutenant the same message $v$. Upon receipt of the commander's message, each
+lieutenant in turn sends the message received to each of the other lieutenants.
+Once a lieutenant has received all $n-1$ expected messages, a majority vote is
+taken among the $n$ messages and the lieutenant declares its output (course of
+action) to be whichever message is in the majority.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+ell/.style={x radius=1, y radius=0.5, draw, shape=circle},
+arr/.style={semithick}]
+\node[ell] (c)  at (0,0)   {Commander};
+\node[ell] (l1) at (0:4)   {Lieutenant 1};
+\node[ell] (l2) at (120:4) {Lieutenant 2};
+\node[ell] (l3) [fill=gray!30] at (240:4) {Lieutenant 3};
+%
+\draw[->, arr] (c) -- node[auto] {$v$} (l1);
+\draw[->, arr] (c) -- node[auto] {$v$} (l2);
+\draw[->, arr] (c) -- node[auto] {$v$} (l3);
+\draw[<->, arr] (l1) -- node[auto,swap,near start] {$v$}
+                        node[auto,swap,near end] {$v$} (l2);
+\draw[<->, arr] (l1) -- node[auto,near start,color=red] {$x$}
+                        node[auto,near end] {$v$} (l3);
+\draw[<->, arr] (l2) -- node[auto,swap,near start,color=red] {$x$}
+                        node[auto,swap,near end] {$v$} (l3);
+\end{tikzpicture}
+\caption{\OM{1} Four generals, one traitor}
+\label{fig:om1}
+\end{figure}
+
+For a fault model we follow~\cite{Rushby-OM1} and assume that nodes are the
+only source of faults. Moreover, node faults are assumed to be either
+\emph{manifest}, \emph{symmetric}, or \emph{byzantine}. A fault is called manifest if
+it is detectable by the non-faulty nodes; for example a node that sends to
+another node a message that explicitly indicates there is a fault. On the
+other hand, a fault is called symmetric if its presence is not necessarily
+detectable as a fault to the other components; for example a node which sends
+wrong messages, as opposed to invalid or missing messages.
+
+Given a formal model of \OM{1}, the standard target for verification is
+\emph{validity} and \emph{agreement}. If we let $l_i$ denote the output for
+lieutenant $i$ (where $1 \le i \le n-1$), then validity states:
+%
+\begin{equation}
+    \forall \,i. \quad l_i = v
+\end{equation}
+%
+whereas agreement states:
+%
+\begin{equation}
+    \forall \,i, j. \quad l_i = l_j
+\end{equation}
+%
+where $i,j$ range over the non-faulty nodes.
+
+It is a classical result that \OM{1} can tolerate at most 1 (byzantine) faulty
+node as long as there are at least 4 nodes in total. By adding additional
+communication rounds, \OM{1} can be extended to an algorithm \OM{m} which
+tolerates at most $m$ faults. On the other hand it is known that any system
+which tolerates $m$ byzantine faults must involve at least $3m+1$ nodes.
+
+In the results above there are several assumptions made regarding the
+underlying computational platform which aren't obvious from the informal
+description, but become so when one considers formally modelling it. To make
+as many assumptions as possible explicit, we require:
+\begin{enumerate}
+    \item every message sent by a node is received successfully by the
+        addressed node,
+    \item when a node receives a message it may determine who sent it,
+    \item each node can detect the absence of a message.
+\end{enumerate}
+These are the assumptions made by Lamport in his constructed solution for
+$\OM{m}$ and the corresponding impossibility result (see
+\cite{Lamport-OM}~\S2). It follows that a system implementing $\OM{1}$ must
+transition synchronously. In particular, in an asynchronous system there is no
+general method for detecting when a message is absent.
 
 \subsection{Model Sketch}
 
@@ -271,17 +360,22 @@ The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, whi
 
 \begin{figure}
   \centering
-  \includegraphics[width=8cm]{figs/proof-structure-validity}
-  \caption{Proof structure for the validity property.}
-  \label{fig:compare}
+  \includegraphics[width=\textwidth]{figs/proof-structure}
+  \caption{Proof structure.}
+  \label{fig:proof}
 \end{figure}
 
-\begin{figure}
-  \centering
-  \includegraphics[width=8cm]{figs/proof-structure-agreement}
-  \caption{Proof structure for the agreement property.}
-  \label{fig:compare}
-\end{figure}
+The proof structure is shown in Figure~\ref{fig:proof}. The two graphs show the structure to prove validity and agreement, respectively. The nodes group related lemmas, and a directed edge from node $a$ to $b$ means lemmas of $b$ depend on $a$. For readability, we have replicated lemmas shared in the proofs of validity and agreement. Additionally, we have elided the dependencies between the lemmas within each node. The proofs are all $k=1$ inductive.
+
+The lemmas are classified into five groups: calendar automata lemmas, abstract state machine lemmas, protocol behavior lemmas, majority vote lemmas, and fault model lemmas.
+
+The calendar automata lemmas do not concern the system. The \emph{cal\_invt} lemma is a conjunction of basic properties about the calendar automata, essentially characterizing the axiomatization described in Section~\ref{sec:calendar}. Additionally, the \emph{missing\_buffer\_size} lemma relates the calendar to a node's message buffer: the messages received added to the empty messages equals the total number of possible messages to receive.
+
+The \emph{abstract\_all} lemmas characterizes the transition between states of the abstract state machine. Technically, \emph{abstract\_all} also depends on ``boilerplate'' lemmas relating each state of the abstract state machine to a state variable representing it, which are elided for space.
+
+The system itself includes both the lemmas characterizing the global protocol behavior as well as majority vote\lee{have we talked about the voting algorithm earlier?}. The global behavior concerns the entire distributed system, whereas the lemmas regarding the majority vote algorithm only concern the behavior of a single node. The proofs mechanize closely the proofs found in Boyer and Moore's original treatment~\cite{}.
+
+Finally, the fault model lemmas relate the fault model to the system. The \emph{fault\_propagation} lemma connects the presence of faulty messages in the calendar with the fault status of nodes that receive those messages in subsequent rounds. The \emph{symmetric\_relay} and \emph{manifest\_relay} lemmas characterize the effect of symmetric and manifest faults, respectively, on the kinds of messages a receiver obtains from a faulty node. All the fault model lemmas mentioned so far are necessary for the agreement proof, but for validity, we need only \emph{candidate\_good}, proving that if the maximum fault assumption holds and the sender is nonfaulty, then no modified messages are received.
 
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
@@ -297,6 +391,9 @@ The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, whi
 
 % ------------------------------------------------------------
 \section{Toward an Architectural Domain-Specific Language}\label{sec:adsl}
+
+% ------------------------------------------------------------
+\section{Related Work}\label{sec:related}
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
