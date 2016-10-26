@@ -182,15 +182,17 @@ In defining the synchronous composition of two transition systems, we allow the 
 The synchronous composition of $M$ and $M'$ is a transition system
 $$M | M' = (S_{M | M'}, I_{M | M'}, \rightarrow_{M | M'})$$
 \noindent
-such that $S_{M | M'} = S \cup S'$,
-$$I_{M | M'} = \{ s_I \cup s_{I'} | s_I \in I\textnormal{, }s_{I'} \in I'\textnormal{, and } s_I \textnormal{ and } s_{I'}\textnormal{ are consistent}\}$$
-\noindent
-and for $s, s' \in S_{M | M'}$, $s \rightarrow_{M | M'} s'$ iff
+such that
 \begin{itemize}
-\item there exist states $s_M, s'_M \in S$ such that $s_M \rightarrow s'_M$, $s_M \subseteq s$, and $s'_M \subseteq s'$,
-\item there exist states $s_{M'}, s'_{M'} \in S'$ such that $s_{M'} \rightarrow s'_{M'}$, $s_{M'} \subseteq s$, and $s'_{M'} \subseteq s'$,
-\item $s_M$ and $s_{M'}$ are consistent,
-\item and $s'_M$ and $s'_{M'}$ are consistent.
+\item $S_{M | M'} = S \cup S'$,
+\item $I_{M | M'} = \{ s_I \cup s_{I'} | s_I \in I\textnormal{, }s_{I'} \in I'\textnormal{, and } s_I \textnormal{ and } s_{I'}\textnormal{ are consistent}\}$
+\item and for $s, s' \in S_{M | M'}$, $s \rightarrow_{M | M'} s'$ iff
+  \begin{itemize}
+  \item there exist states $s_M, s'_M \in S$ such that $s_M \rightarrow s'_M$, $s_M \subseteq s$, and $s'_M \subseteq s'$,
+  \item there exist states $s_{M'}, s'_{M'} \in S'$ such that $s_{M'} \rightarrow s'_{M'}$, $s_{M'} \subseteq s$, and $s'_{M'} \subseteq s'$,
+  \item $s_M$ and $s_{M'}$ are consistent,
+  \item and $s'_M$ and $s'_{M'}$ are consistent.
+  \end{itemize}
 \end{itemize}
 \end{definition}
 
@@ -202,22 +204,8 @@ By convention, the assumptions $\mathcal{A}$ should be a refinement of the syste
 
 There are two practical benefits of the synchronous observer approach. First, the system $\mathcal{S}$ contains no extraneous modeling context about the environment, assumptions, or requirements, making it easier to decompose $\mathcal{S}$ and to synthesize an implementation directly from it. Second, as described by Rushby~\cite{}, specifying requirements is simpler.
 
-% ------------------------------------------------------------
-\subsection{Abstract State Machines}\label{sec:abstract}\label{sec:asms}
-When model-checking a system, counterexamples to properties are traces of states. A state is a collection of variable values, and in large models, there are a lot. A single state includes assignments to each of the variables, and counterexample trace may be many 10s of states in length. In practice, counterexamples depend on a small number of state variables. The user has to manually separate the state variables that matter from those that do not for a specific property. It is not enough prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when model-checking models that have sufficient detail for implementation synthesis, as is the goal in our work.
-
-Systems are usually designed in modes such that predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
-
-Our solution to the problem of constructing a mode-based state machine uses abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize the Church-Turing thesis for abstract data structures~\cite{}. Since then, ASMs have become an engineering technique for simulating a system at different levels of abstraction.
-
-\lee{http://www2.informatik.hu-berlin.de/sam/preprint/reisig203.pdf}
-More precisely, we implement a sequential small-step ASM~\cite{}.
-\begin{definition}[Sequential small-step ASM]
-Let $V$ be a finite set of state variables. Let $s$ be an assignment of variables to values, and let $b$ be a relation Å
-\end{definition}
-
-% ------------------------------------------------------------
-\section{The Synchronous Kibitzer}\label{sec:kibitzer}
+\subsection{The Synchronous Kibitzer}\label{sec:kibitzer}
+\lee{We use synchronous composition to implement fault injection. Mention in the intro. This is fundamental to the model, so we have section devoted to it.}
 The typical approach to injecting faults into a formal model of a distributed system is to add a new state variables to each process representing its fault state. Then additional state variables are added to represent the nondeterminism introduced by faults into the state or messages by a process. Finally, additional transitions are added to each process to modify the process's state or messages based on it's current fault state.
 
 This straightforward approach introduces substantial additional state and nondeterminism, reducing the scalability of model-checking. Modeling faults is particularly expensive given that additional state and nondeterminism is added to each process. These scalability issues are noted throughout the literature. For example, \lee{TTA startup paper, helmut's paper, etc.}
@@ -232,7 +220,7 @@ To achieve the full range of faulty behaviors, it seems that a faulty source sho
 
 To address these problems, we introduce a synchronous observer that injects faults that we call a \emph{synchronous kibitzer}. The kibitzer decomposes the state and transitions associated with the fault model from the system. For the sake of concreteness, we introduce a particular fault model, the hybrid fault model of Thambidurai and Park~\cite{}. The fault model distinguishes Byzantine (or arbitrary), symmetric, and manifest faults. This fault model applies to broadcast systems, in which a process is expected to broad the same value to multiple receivers. A \emph{Byzantine fault} is one in which a process that is intended to broadcast the same value to other processes may instead broadcast arbitrary values to different receivers (including no value or the correct value). A \emph{symmetric fault} is one in which a process may broadcast the same, but incorrect, value to other processes, and a \emph{manifest fault} is one in which a process's broadcast fault is detectable by the receivers; e.g., by performing a cyclic redundancy check (CRC) or because the value arrives outside of a predetermined window.
 
-In specifying a fault-tolerant system, we must also specify a \emph{maximum fault assumption} (MFA), which specifies the maximum number of of each kind of fault that may be present in the system for some system property to hold. Define a enumeration of fault types $$\textnormal{FAULT\_TYPE} = \{none, byz, sym, man\}$$. As in the previous section, let $Id \subset \mathbb{N}$ be a finite set of indices, and let the variable $$faults: Id \rightarrow \textnormal{FAULT\_TYPE}$$ range over possible mappings from process indices to faults.
+In specifying a fault-tolerant system, we must also specify a \emph{maximum fault assumption} (MFA), which specifies the maximum number of of each kind of fault that may be present in the system for some system property to hold. Define a enumeration of fault types $$\textnormal{FAULT\_TYPE} = \{none, byz, sym, man\}$$ As in the previous section, let $Id \subset \mathbb{N}$ be a finite set of indices, and let the variable $$faults: Id \rightarrow \textnormal{FAULT\_TYPE}$$ range over possible mappings from process indices to faults.
 
 The hybrid fault model assumes a broadcast model of communication.
 % Define $rnd: \mathbb{R} \rightarrow \mathbb{N}$ such that if $rnd(t_0) < rnd(t_1)$, then $t_0 < t_1$.
@@ -258,6 +246,23 @@ For symmetric faults, we there is no requirement that the messages sent are the 
 \end{align*}
 \noindent
 Byzantine faults are left completely unconstrained.
+
+
+% ------------------------------------------------------------
+\subsection{Abstract State Machines}\label{sec:abstract}\label{sec:asms}
+When model-checking a system, counterexamples to properties are traces of states. A state is a collection of variable values, and in large models, there are a lot. A single state includes assignments to each of the variables, and counterexample trace may be many 10s of states in length. In practice, counterexamples depend on a small number of state variables. The user has to manually separate the state variables that matter from those that do not for a specific property. It is not enough prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when model-checking models that have sufficient detail for implementation synthesis, as is the goal in our work.
+
+Systems are usually designed in modes such that predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
+
+Our solution to the problem of constructing a mode-based state machine uses abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize the Church-Turing thesis for abstract data structures~\cite{}. Since then, ASMs have become an engineering technique for simulating a system at different levels of abstraction.
+
+\lee{http://www2.informatik.hu-berlin.de/sam/preprint/reisig203.pdf}
+More precisely, we implement a sequential small-step ASM~\cite{}.
+\begin{definition}[Sequential small-step ASM]
+Let $V$ be a finite set of state variables. Let $s$ be an assignment of variables to values, and let $b$ be a relation Å
+\end{definition}
+
+% ------------------------------------------------------------
 
 % ------------------------------------------------------------
 \section{Extended Example: OM(1)}\label{sec:byz}
