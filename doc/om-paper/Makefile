@@ -9,14 +9,14 @@ tex=latex -output-directory $(WORK_DIR) --interaction=batchmode
 
 all: $(TGT).pdf
 
-$(TGT).pdf: $(WORK_DIR) *.tex *.bib
+$(TGT).pdf: $(WORK_DIR) *.tex *.bib llncs
 	$(latex) $(TGT)
 	bibtex $(WORK_DIR)/$(TGT).aux
 	$(latex) $(TGT)
 	$(latex) $(TGT)
 	cp $(WORK_DIR)/$(TGT).pdf .
 
-$(TGT).dvi: $(WORK_DIR) $(TGT).tex *.bib
+$(TGT).dvi: $(WORK_DIR) $(TGT).tex *.bib llncs
 	$(tex) $(TGT)
 	bibtex $(WORK_DIR)/$(TGT).aux
 	$(tex) $(TGT)
@@ -26,9 +26,15 @@ $(TGT).dvi: $(WORK_DIR) $(TGT).tex *.bib
 $(WORK_DIR):
 	mkdir -p $(WORK_DIR)
 
+llncs:
+	mkdir -p llncs; cd llncs; \
+		curl ftp://ftp.springer.de/pub/tex/latex/llncs/latex2e/llncs2e.zip > llncs.zip; \
+		unzip llncs.zip
+
 clean:
 	-rm -rf $(WORK_DIR)
 
 veryclean: clean
 	-rm $(TGT).pdf
 	-rm $(TGT).dvi
+	-rm -rf llncs
