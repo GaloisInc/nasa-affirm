@@ -1,3 +1,15 @@
+-- |
+-- Module      :  AtomOM1
+-- Copyright   :  Benjamin Jones 2016
+-- License     :  BSD3
+--
+-- Maintainer  :  bjones@galois.com
+-- Stability   :  experimental
+-- Portability :  unknown
+--
+-- A specification for the distributed, fault tolerant system OM(1) written
+-- using Atom (https://github.com/GaloisInc/atom).
+--
 module AtomOM1
   ( om1
   )
@@ -9,8 +21,8 @@ import Data.Int
 import Language.Atom
 import Language.Sally
 
--- Parameters ----------------------------------------------------------
 
+-- Parameters ----------------------------------------------------------
 
 -- Node clock periods (in ticks)
 initPeriod     = 100
@@ -149,8 +161,8 @@ observer = period observerPeriod
   ps <- probes
   mapM_ printProbe ps
 
--- Miscellaneous helper functions and definittions ---------------------
--- Messages ------------------------------------------------------------
+
+-- Helper functions and definitions for Channels and Messages ----------
 
 type MsgType = Int64
 msgType = Int64
