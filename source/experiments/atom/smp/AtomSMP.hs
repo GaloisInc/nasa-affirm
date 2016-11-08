@@ -23,6 +23,7 @@ recvPeriod     = 5
 -- Messages ------------------------------------------------------------
 
 type MsgType = Int64
+msgType = Int64
 
 -- | Special message value indicating "no message present"
 missingMsgValue :: MsgType
@@ -42,8 +43,8 @@ goodMsg' = Const 2
 smp :: Atom ()
 smp = do
   -- setup channel for communication between source and receiver
-  (s2rIn, s2rOut)   <- channel "s2r_1" missingMsgValue
-  (s2rIn', s2rOut') <- channel "s2r_2" missingMsgValue
+  (s2rIn, s2rOut)   <- channel "s2r_1" msgType
+  (s2rIn', s2rOut') <- channel "s2r_2" msgType
 
   -- declare system nodes:
 
@@ -94,7 +95,7 @@ recv nm c = period recvPeriod . atom nm $ do
   vote <- int64 (nm ++ "_vote") missingMsgValue
   probe (nm ++ "_vote") (value vote)
 
-  condChannel c           -- execute only if channel 'c' has new message
+  cond $ fullChannel c    -- execute only if channel 'c' has new message
   vote <== readChannel c  -- read message and assign to 'vote'
   done <== Const True
 

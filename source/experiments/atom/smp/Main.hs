@@ -10,7 +10,7 @@ main = do
   putStrLn "Compiling SMP to C... (smp.{c,h})"
   compileSMPToC
   putStrLn "Compiling SMP to Sally... (smp.mcmt)"
-  compileToSally "smp" TrConfig "smp.mcmt" smp Nothing
+  compileToSally "smp" defaultCfg "smp.mcmt" smp Nothing
   putStrLn "Done."
 
 
@@ -20,8 +20,8 @@ main = do
 -- Also print out info on the generated schedule.
 compileSMPToC :: IO ()
 compileSMPToC = do
-  (sched, _, _, _, _) <- compile "smp" cfg smp
-  putStrLn $ reportSchedule sched
+  res <- compile "smp" cfg smp
+  putStrLn $ reportSchedule (compSchedule res)
   where
     cfg = defaults { cCode = prePostCode }
 
