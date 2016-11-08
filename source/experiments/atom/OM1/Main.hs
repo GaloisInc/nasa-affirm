@@ -11,7 +11,7 @@ main = do
   compileOM1ToC
 
   putStrLn "Compiling OM1 to Sally... (om1.mcmt)"
-  compileToSally "om1" TrConfig "om1.mcmt" om1 Nothing
+  compileToSally "om1" defaultCfg "om1.mcmt" om1 Nothing
 
   putStrLn "Done."
 
@@ -22,8 +22,8 @@ main = do
 -- Also print out info on the generated schedule.
 compileOM1ToC :: IO ()
 compileOM1ToC = do
-  (sched, _, _, _, _) <- compile "om1" cfg om1
-  putStrLn $ reportSchedule sched
+  res <- compile "om1" cfg om1
+  putStrLn $ reportSchedule (compSchedule res)
   where
     cfg = defaults { cCode = prePostCode }
 

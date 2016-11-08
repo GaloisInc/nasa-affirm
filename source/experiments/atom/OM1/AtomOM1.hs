@@ -84,9 +84,10 @@ relay ident inC outCs = period relayPeriod
   done <- bool "done" False
   msg  <- msgVar (tg "relay_msg" ident)
 
-  -- activation condition
-  cond $ isMissing msg  -- we haven't stored a value yet
-  condChannel inC       -- there is a value available
+  -- activation condition:
+  --   we haven't stored a value yet and there is a message waiting
+  --   on the channel 'inC'
+  cond $ (isMissing msg) &&. (fullChannel inC)
 
   -- behavior
   msg  <== readChannel inC
@@ -104,15 +105,14 @@ recv :: Int           -- ^ receiver id
      -> V MsgType
      -> Atom ()
 recv ident inCs vote = period recvPeriod
-                . atom (tg "recv" ident) $ do
+                     . atom (tg "recv" ident) $ do
   done <- bool "done" False
   buffer <- mapM msgVar [ tg (tg "buffer" ident) i | i <- relaySet ]
 
   -- declare multiple "pollers", one for each buffer location
   forM_ relaySet $ \i -> do
     atom (tg2 "recv_poll" ident i) $ do
-      cond $ isMissing (buffer !! i)
-      condChannel (inCs !! i)
+      cond $ (isMissing (buffer !! i)) &&. (fullChannel (inCs !! i))
       (buffer !! i) <== readChannel (inCs !! i)
 
   -- declare a voter
@@ -153,6 +153,7 @@ observer = period observerPeriod
 -- Messages ------------------------------------------------------------
 
 type MsgType = Int64
+msgType = Int64
 
 -- | Specially designated intended message to be send in the absense of faults
 goodMsg :: E MsgType
@@ -170,7 +171,7 @@ isMissing = (==. missingMsgValueE) . value
 
 -- | Declare a new channel with 'missingMsgValue' as its initial value
 newChannel :: String -> Atom (ChanInput, ChanOutput)
-newChannel = flip channel missingMsgValue
+newChannel = flip channel msgType
 
 -- | Declare a variable of message type and add a probe for it to the
 -- environment
