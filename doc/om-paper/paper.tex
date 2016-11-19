@@ -58,7 +58,7 @@ There is substantial literature on verifying fault-tolerant distributed systems.
 
 In contrast, model-checking for this class of systems is automated~\cite{}, but has limited scalability, particularly in the context of modeling the nondetermism of faults and distributed computation. The way that scalability is usually addressed is by specialization and ad-hoc model-specific abstractions. Specialization includes fixing a (small number) of nodes and topology for distributed protocols that are parameterized by the number of nodes and network.
 
-Two examples of model-specific abstractions include the following: (1) Suppose we model a system in which a process that broadcasts the values $\{0, 1\}$ in the nominal case, but when the process suffers a fault, it broadcasts no value. To model the system, it is typical to define an enumerated type of broadcast values as $$\{0, 1, NONE\}$. However, the enumeration conflates the environment (i.e., faults) and system (i.e., the non-faulty broadcast values). (2) Another example is to model message passing as shared state between processes to reduce the number of state variables in the model, since the message passing mechanism is elided. While these optimizations might be safe under particular assumptions, they require careful meta-level reasoning and justification and divorce the model from any realization of it.
+Two examples of model-specific abstractions include the following: (1) Suppose we model a system in which a process that broadcasts the values $\{0, 1\}$ in the nominal case, but when the process suffers a fault, it broadcasts no value. To model the system, it is typical to define an enumerated type of broadcast values as $$\{0, 1, NONE\}$$ However, the enumeration conflates the environment (i.e., faults) and system (i.e., the non-faulty broadcast values). (2) Another example is to model message passing as shared state between processes to reduce the number of state variables in the model, since the message passing mechanism is elided. While these optimizations might be safe under particular assumptions, they require careful meta-level reasoning and justification and divorce the model from any realization of it.
 
 However, recent advances in model-checking allow for better scalability and model fidelity, and they begin to blur the lines between model-checking and interactive theorem-proving. In particular, $k$-induction for infinite-state systems allows the specifier to assert $k$-inductive lemmas 
 
@@ -70,7 +70,7 @@ The model also employs \emph{synchronous observers}~\cite{}. Synchronous observe
 
 We validate the model with a number of small examples \lee{todo}, as well as an extended case-study, verifying the Oral Messages (1) protocol (OM(1))~\cite{}. While our model is more detailed---it explicitly models channels---and also more general---it allows bounded asynchrony between processes---it is the most scalable model-checking verification of the protocol.
 
-\lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking: will need user-provided lemmas. compositional approach to providing lemmas }
+\lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking: will need user-provided lemmas. compositional approach to providing lemmas. note verification interesting in its own right }
 
  %% Timed automata are an alternative to the \emph{timed automata} formalism~\cite{}, as implemented in model-checkers like UPPAAL~\cite{} and Kronos~\cite{}.
 
@@ -271,99 +271,98 @@ Our use of ASMs to improve traceability is even more restrictive. We construct a
 % ------------------------------------------------------------
 
 % ------------------------------------------------------------
-\section{Putting it Together: Compositional Modeling and Verification}\label{sec:byz}
+\section{Putting it Together: Compositional Modeling and Verification for Oral Messages}\label{sec:byz}
 
-We have instantiated the formal model described above to model and verify the classic OM(1) Byzantine fault-tolerant algorithm~\cite{}. OM(1) and its variants have been verified in other settings, allowing us to benchmark our results against others (see Section~\ref{sec:experimental} for experimental results).
+To demonstrate the model and techniques, we model the classic OM(1) Byzantine fault-tolerant algorithm~\cite{} in our framework. OM(1) has been modeled in a variety of formal tools~\cite{}, providing a nice comparison with our work. Then, we make modifications to the OM(1) model, and show the model's resilience to those changes. By ``resilience'', we mean that only a small, localized portion of the must be modified, and only a small set of lemmas must be modified.
 
-The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use the infinite-state model-checker using $k$-induction~\cite{}.
+The dimensions along which we make changes are the following: the fault model, topology, local node behavior, and synchronization. \lee{Did we complete these?}
 
-\subsection{OM(1) Overview}
-Our first case is the ``Oral Messages'' algorithm to solve the Byzantine
-Generals Problem~\cite{Lamport-OM}. The algorithm, $\OM{m}$, is parameterized by
-the number of rounds of message relay. Here, we focus on Oral Messages with one
-round of communication, $\OM{1}$, that tolerates a single Byzantine fault, so
-long as there are a sufficient number of nodes nodes.
+The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{}.
 
-Figure~\ref{fig:om1} depicts the communication pattern for \OM{1}. Each of the
-$n$ nodes in the system represents a (Byzantine) General. In this formulation, the
-center node is the commanding general, while the $n-1$ outer generals are the
-lieutenants. The algorithm starts with the commanding general sending each
-lieutenant the same message $v$. Upon receipt of the commander's message, each
-lieutenant in turn sends the message received to each of the other lieutenants.
-Once a lieutenant has received all $n-1$ expected messages, a majority vote is
-taken among the $n$ messages and the lieutenant declares its output (course of
-action) to be whichever message is in the majority.
+The verification is interesting in its own right, as it is the first $k$-induction based verification over a fully-parameterized OM(1) model (we describe this in more detail in Section~\ref{sec:related}).
 
-\begin{figure}[ht]
-\centering
-\begin{tikzpicture}[
-ell/.style={x radius=1, y radius=0.5, draw, shape=circle},
-arr/.style={semithick}]
-\node[ell] (c)  at (0,0)   {Commander};
-\node[ell] (l1) at (0:4)   {Lieutenant 1};
-\node[ell] (l2) at (120:4) {Lieutenant 2};
-\node[ell] (l3) [fill=gray!30] at (240:4) {Lieutenant 3};
-%
-\draw[->, arr] (c) -- node[auto] {$v$} (l1);
-\draw[->, arr] (c) -- node[auto] {$v$} (l2);
-\draw[->, arr] (c) -- node[auto] {$v$} (l3);
-\draw[<->, arr] (l1) -- node[auto,swap,near start] {$v$}
-                        node[auto,swap,near end] {$v$} (l2);
-\draw[<->, arr] (l1) -- node[auto,near start,color=red] {$x$}
-                        node[auto,near end] {$v$} (l3);
-\draw[<->, arr] (l2) -- node[auto,swap,near start,color=red] {$x$}
-                        node[auto,swap,near end] {$v$} (l3);
-\end{tikzpicture}
-\caption{\OM{1} Four generals, one traitor}
-\label{fig:om1}
-\end{figure}
+\lee{also note that OM(1) underlies many real-world systems}
 
-For a fault model we follow~\cite{Rushby-OM1} and assume that nodes are the
-only source of faults. Moreover, node faults are assumed to be either
-\emph{manifest}, \emph{symmetric}, or \emph{byzantine}. A fault is called manifest if
-it is detectable by the non-faulty nodes; for example a node that sends to
-another node a message that explicitly indicates there is a fault. On the
-other hand, a fault is called symmetric if its presence is not necessarily
-detectable as a fault to the other components; for example a node which sends
-wrong messages, as opposed to invalid or missing messages.
+\subsection{OM(1) Algorithm}
+The ``Oral Messages'' algorithm solves the Byzantine Generals
+Problem~\cite{Lamport-OM}. The algorithm, $\OM{m}$, is a recursive algorithm, parameterized by the number of rounds of communication, $m$. Consider a finite set of nodes $N$. Distinguish one node as the general, $g$, and the remaining nodes $L = N \setminus \{g\}$ as the lieutenants. The general will broadcast a value to the lieutenants. The goal of the algorithm is for each of the lieutenants to agree on the value sent by $g$ in the presence of a Byzantine faulty general or lieutenants. More precisely, we assume the identity of a sender cannot be spoofed, broadcast communication proceeds in synchronous rounds such that the absence of a message in a round can be detected by the receiver (let $None$ be a constant used when no message is received), and a Byzantine faulty sender can arbitrary corrupt or not send a message, but there are no other faults in the system.
 
-Given a formal model of \OM{1}, the standard target for verification is
-\emph{validity} and \emph{agreement}. If we let $l_i$ denote the output for
-lieutenant $i$ (where $1 \le i \le n-1$), then validity states:
+The algorithm proceeds as follows:
+
+\begin{itemize}
+\item {\bf $OM(0)$}: $g$ broadcasts a value to each lieutenant, and the lieutenants return the value received (or $None$).
+\item {\bf $OM(m)$, $m > 0$}:
+  \begin{enumerate}
+  \item $g$ broadcasts a value to each lieutenant, $l$.
+  \item\label{om:two} Let $v$ be the value received by $l$. Then for each $l$, execute $OM(m-1)$ with general $l$ and lieutenants $L \setminus \{l\}$.
+  \item For each lieutenant $l$, output the majority value received from the other lieutenants.
+  \end{enumerate}
+\end{itemize}
+
+\noindent
+Therefore, $OM(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
+
+%% parameterized by the
+%% number of rounds of message relay. Here, we focus on Oral Messages with one
+%% round of communication, $\OM{1}$, that tolerates a single Byzantine fault \todo{true?}, so
+%% long as there are a sufficient number of nodes nodes.
+
+%% Each of the $n$ nodes in the system represents a (Byzantine) General. In this
+%% formulation, the center node is the commanding general, while the $n-1$ outer
+%% generals are the lieutenants. The algorithm starts with the commanding general
+%% sending each lieutenant the same message $v$. Upon receipt of the commander's
+%% message, each lieutenant in turn sends the message received to each of the other
+%% lieutenants.  Once a lieutenant has received all $n-1$ expected messages, a
+%% majority vote is taken among the $n$ messages and the lieutenant declares its
+%% output (course of action) to be whichever message is in the majority.
+
+%% \begin{figure}[ht]
+%% \centering
+%% \begin{tikzpicture}[
+%% ell/.style={x radius=1, y radius=0.5, draw, shape=circle},
+%% arr/.style={semithick}]
+%% \node[ell] (c)  at (0,0)   {Commander};
+%% \node[ell] (l1) at (0:4)   {Lieutenant 1};
+%% \node[ell] (l2) at (120:4) {Lieutenant 2};
+%% \node[ell] (l3) [fill=gray!30] at (240:4) {Lieutenant 3};
+%% %
+%% \draw[->, arr] (c) -- node[auto] {$v$} (l1);
+%% \draw[->, arr] (c) -- node[auto] {$v$} (l2);
+%% \draw[->, arr] (c) -- node[auto] {$v$} (l3);
+%% \draw[<->, arr] (l1) -- node[auto,swap,near start] {$v$}
+%%                         node[auto,swap,near end] {$v$} (l2);
+%% \draw[<->, arr] (l1) -- node[auto,near start,color=red] {$x$}
+%%                         node[auto,near end] {$v$} (l3);
+%% \draw[<->, arr] (l2) -- node[auto,swap,near start,color=red] {$x$}
+%%                         node[auto,swap,near end] {$v$} (l3);
+%% \end{tikzpicture}
+%% \caption{\OM{1} Four generals, one traitor}
+%% \label{fig:om1}
+%% \end{figure}
+
+$OM(1)$ is designed to preserve \emph{validity} and \emph{agreement}
+properties. Validity states that if the general is non-faulty, then every lieutenant outputs the value sent by the general. More formally, let the general broadcast $v$, and let $l_i$ denote the output for lieutenant $i$:
 %
 \begin{equation}
+  \tag{Validity}
     \forall \,i. \quad l_i = v
 \end{equation}
 %
-whereas agreement states:
+Agreement states that each lieutenant outputs the same value. Let $l_i, l_j$ denote the outputs of lieutenants $i, j \in L$, respectively:
 %
 \begin{equation}
+  \tag{Agreement}
     \forall \,i, j. \quad l_i = l_j
 \end{equation}
 %
-where $i,j$ range over the non-faulty nodes.
 
-It is a classical result that \OM{1} can tolerate at most 1 (byzantine) faulty
-node as long as there are at least 4 nodes in total. By adding additional
-communication rounds, \OM{1} can be extended to an algorithm \OM{m} which
-tolerates at most $m$ faults. On the other hand it is known that any system
-which tolerates $m$ byzantine faults must involve at least $3m+1$ nodes.
+$OM(m)$ was originally designed to tolerate Byzantine faults. It is classic
+result that $OM(m)$ satisifies validity and agreement if the number of
+nodes is at least $3m+1$, and there no more than $m$
+Byzantine faulty nodes~\cite{}.
 
-In the results above there are several assumptions made regarding the
-underlying computational platform which aren't obvious from the informal
-description, but become so when one considers formally modelling it. To make
-as many assumptions as possible explicit, we require:
-\begin{enumerate}
-    \item every message sent by a node is received successfully by the
-        addressed node,
-    \item when a node receives a message it may determine who sent it,
-    \item each node can detect the absence of a message.
-\end{enumerate}
-These are the assumptions made by Lamport in his constructed solution for
-$\OM{m}$ and the corresponding impossibility result (see
-\cite{Lamport-OM}~\S2). It follows that a system implementing $\OM{1}$ must
-transition synchronously. In particular, in an asynchronous system there is no
-general method for detecting when a message is absent.
+The fault model of $OM(1)$ has been extended to hybrid fault model described in Section~\ref{sec:kibitzer}. Under that fault model, the hypothesis for proving validity and agreement can be weakened to assuming there must be at least $2a+2s+b+1
+
 
 \subsection{Model Sketch}
 
@@ -405,6 +404,7 @@ Finally, the fault model lemmas relate the fault model to the system. The \emph{
 
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
+\lee{talk about om1 verification, comparing it to others.}
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
