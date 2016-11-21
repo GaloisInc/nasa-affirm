@@ -35,17 +35,36 @@
 om1_cal {; num_relays: nznat, num_recvs: nznat}: CONTEXT =
 BEGIN
 
-
-%=== Nodes and IDs -----------------------------------------------===
+%=== Basic Types -------------------------------------------------===
 
 % IDs for nodes
 num_nodes: NATURAL = num_relays + num_recvs + 1;
 IDENTITY:  TYPE     = [0..(num_nodes-1)];
 
+TIME: TYPE = { t: REAL | t >= -2 };
+MESSAGE: TYPE = { m: INTEGER | m >= -1 };
+REAL_MESSAGE: TYPE = { m: MESSAGE | m >= 0 };
+uninterp_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
+
+% UNCOMMENT the following lines to get a finite model.
+%
+% This is mostly for debugging purposes, e.g. running 'sal-deadlock-checker'
+% and 'sal-path-finder' over the model.
+%
+% upper_bound : INTEGER = 5;
+% TIME: TYPE = [-2..upper_bound];
+% MESSAGE: TYPE = [-1..upper_bound];
+% uninterp_msg(i: IDENTITY, j: IDENTITY): INTEGER = upper_bound;
+
+
+%=== Nodes and IDs -----------------------------------------------===
+
+
 % Relay IDs
 source_id: IDENTITY = 0;
 
 RELAYS: TYPE = [1..num_relays];
+RELAYS_COUNT: TYPE = [0..num_relays];
 relay_id(n: nznat): RELAYS = n;  % map relay # to relay ID
 id_relay(i: RELAYS): nznat = i;  % invert ^^^
 
@@ -114,7 +133,6 @@ is_receiver_channel?(c: CHANNEL): BOOLEAN =
 % Times which appear as event times on the calendar are restriced to the set
 % {-2} U {-1} U { t >= 0 }.
 %
-TIME: TYPE = { t: REAL | t >= -2 };
 invalid_time: TIME = -1;
 atomic_time: TIME = -2;
 msg_delay: TIME = 1;
@@ -127,6 +145,9 @@ FAULT_TYPE: TYPE = { nonfaulty, byzantine, manifest, symmetric };
 FAULTS: TYPE = ARRAY IDENTITY OF FAULT_TYPE;
 is_faulty?(fi: FAULT_TYPE): BOOLEAN = fi /= nonfaulty;
 
+% A "faulty" message is a real message that is not the 'good_msg' value. A
+% "real" message is one that is not 'missing'.
+is_faulty_msg?(m: MESSAGE): BOOLEAN = m > 0;
 
 %=== Messages and Values -----------------------------------------===
 
@@ -136,17 +157,12 @@ is_faulty?(fi: FAULT_TYPE): BOOLEAN = fi /= nonfaulty;
 % to support nodes emitting an arbitrary number of distinct faulty (non-good)
 % values
 
-MESSAGE: TYPE = { m: INTEGER | m >= -1 };
 % some named messages
 good_msg:    MESSAGE = 0;   % when 'source' is not faulty, this is the
                             %   intended message
 bad_msg:     MESSAGE = 1;   % used for manifest faults
 missing:     MESSAGE = -1;  % used as a placeholder initial value
 
-% A "faulty" message is a real message that is not the 'good_msg' value. A
-% "real" message is one that is not 'missing'.
-is_faulty_msg?(m: MESSAGE): BOOLEAN = m > 0;
-is_real_msg?(m: MESSAGE): BOOLEAN = m >= 0;
 
 % Values produced by reading from the calendar are constrained to be "real"
 % messages. Additional constraints are added by the hybrid fault model's maximum
@@ -157,11 +173,10 @@ is_real_msg?(m: MESSAGE): BOOLEAN = m >= 0;
 % here that each node 'i' only ever sends one message to node 'j' and thus
 % 'uninterp_msg' does not need to depend on time.
 %
-REAL_MESSAGE: TYPE = { m: MESSAGE | is_real_msg?(m) };
-uninterp_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
 
 % Count the number of a certain message in a buffer
-cntBuf(ix: RELAYS, max: RELAYS, buffer: ARRAY RELAYS of MESSAGE, m: MESSAGE): NATURAL =
+cntBuf(ix: RELAYS, max: RELAYS, buffer: ARRAY RELAYS of MESSAGE, m: MESSAGE):
+NATURAL =
   IF ix > num_relays OR ix > max
     THEN 0
     ELSIF buffer[ix] = m
@@ -397,8 +412,7 @@ BEGIN
     LOCAL
         mode: RECEIVER_MODES,
         buffer_size: [0..num_relays],
-        candidate: MESSAGE,
-        pc: [0..(num_relays+1)]
+        candidate: MESSAGE
 INITIALIZATION
     % outputs
     mode = receiving;
@@ -410,7 +424,6 @@ INITIALIZATION
     candidate = missing;
     counter = 0;
     ix = 1;
-    pc = 0;
 TRANSITION
     [
       %----------------------------------------------------------------
@@ -453,16 +466,14 @@ TRANSITION
       %----------------------------------------------------------------
 
       receiver_vote_0:
-      mode = voting AND pc = 0 AND i_am_atomic?(cal, p, t) -->
+      mode = voting AND ix = 0 AND i_am_atomic?(cal, p, t) -->
         candidate' = missing;
         counter' = 0;
-        ix' = 1;
-        pc' = pc + 1
+        ix' = ix + 1;
     []
       % Process a normal buffer elements
       receiver_vote_loop:
           mode = voting
-      AND pc > 0
       AND relay_id(1) <= ix AND ix <= relay_id(num_relays)
       AND i_am_atomic?(cal, p, t) -->
 
@@ -493,11 +504,9 @@ TRANSITION
                      ENDIF;
 
         ix' = ix + 1;
-        pc' = pc + 1;
     []
         receiver_exit:
             mode = voting
-        AND pc > num_relays+1
         AND ix > relay_id(num_relays)
         AND i_am_atomic?(cal, p, t) -->
           cal' = msg_consume(cal, p, p);  % release the atomic lock
@@ -529,11 +538,13 @@ system: MODULE =
          WITH OUTPUT buffers:        ARRAY RECEIVERS of ARRAY RELAYS of MESSAGE
          WITH OUTPUT votes:          ARRAY RECEIVERS of MESSAGE
          WITH OUTPUT majorities:     ARRAY RECEIVERS of BOOLEAN
+         WITH OUTPUT mode:           ARRAY RECEIVERS of RECEIVER_MODES
            ([] (x:RECEIVERS):  RENAME vote TO votes[x]
                                IN RENAME buffer TO buffers[x]
                                IN RENAME receiver_done TO receivers_done[x]
                                IN RENAME counter TO counters[x]
                                IN RENAME ix TO ixs[x]
+                               IN RENAME mode TO mode[x]
                                IN receiver[x]));
 
 
@@ -1072,15 +1083,13 @@ receiver_mode_invt: LEMMA system_obs |-
      AND (   (    mode[r] = receiving
               AND counters[r] = 0
               AND ixs[r] = 1
-              AND pc[r] = 0
               AND buffer_size[r] < num_relays
               AND candidate[r] = missing
              )
              % receiver buffer is full, switched to voting mode
           OR (    mode[r] = voting
               AND counters[r] = 0
-              AND ixs[r] = 1
-              AND (pc[r] = 0 OR pc[r] = 1)
+              AND (ixs[r] = 0 OR ixs[r] = 1)
               AND buffer_size[r] = num_relays
               AND candidate[r] = missing
               AND FORALL (i: RELAYS): buffers[r][i] /= missing
@@ -1090,7 +1099,7 @@ receiver_mode_invt: LEMMA system_obs |-
               AND counters[r] <= cntBuf(relay_id(1), ixs[r]-1,
                                         buffers[r], candidate[r])
               AND ixs[r] <= num_relays+1
-              AND pc[r] >= 1
+              AND ixs[r] >= 1
               AND candidate[r] /= missing
               AND EXISTS (i: RELAYS): (buffers[r][i] = candidate[r] AND i < ixs[r])
               AND buffer_size[r] = num_relays
@@ -1102,7 +1111,7 @@ receiver_mode_invt: LEMMA system_obs |-
     OR (    receivers_done[r]
         AND mode[r] = done
         AND ixs[r] = relay_id(num_relays)+1
-        AND pc[r] >= 1
+        AND ixs[r] >= 1
         AND votes[r] = candidate[r]
         AND buffer_size[r] = num_relays
         AND FORALL (i: RELAYS): buffers[r][i] /= missing
@@ -1230,5 +1239,16 @@ recv_test: THEOREM system |- G(NOT FORALL (i:RECEIVERS): receivers_done[i]);
 %   true to depth ?
 %   counterexample at depth ?
 all_done_test: THEOREM system_obs |- G(not_done);
+
+% Sanity checks.
+%
+% If the model is correct, these should all be non-THEOREMS.
+% Currently you can find a counter example through bounded model checking to
+% a depth of 25.
+%
+sanity1: THEOREM system |- G(FORALL (r: RECEIVERS): NOT receivers_done[r]);
+sanity2: THEOREM system |- G(FORALL (r: RELAYS): NOT relays_done[r]);
+sanity3: THEOREM system |- G(EXISTS (r: RECEIVERS): EXISTS (i: RELAYS): buffers[r][i] = missing);
+sanity4: THEOREM system |- G(EXISTS (r: RECEIVERS): FORALL (i: RELAYS): buffers[r][i] = missing);
 
 END
