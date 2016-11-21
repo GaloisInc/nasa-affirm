@@ -1,0 +1,61 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.box = "debian/contrib-jessie64"
+  config.vm.provider "virtualbox" do |vb|
+     # Customize the amount of memory on the VM:
+     vb.memory = "1024"
+  end
+
+  # EDIT THIS LINE to share your project directory with the VM
+  config.vm.synced_folder "/home/alice/project", "/home/vagrant/project"
+
+  # Support caching debian packages on the host
+  cache_dir = local_cache(config.vm.box)
+  config.vm.synced_folder cache_dir, "/var/cache/apt/archives/"
+
+  me = ENV["USER"]
+  config.vm.provision "shell", inline: <<-SHELL
+#!/bin/bash
+set -eux
+
+echo "You are: '#{me}'"
+VHOME=/home/vagrant
+
+sudo apt-get update
+
+# Basic dev tools
+sudo apt-get install -y                                     \\
+    vim-nox tmux python git zsh curl wget silversearcher-ag
+
+# Install SAL binary package
+SAL_DIR="$VHOME/sal"
+if [ ! -d "$SAL_DIR" ]; then
+
+  echo 'Downloading SAL...'
+  wget "http://sal.csl.sri.com/cgi-bin/download.cgi?file=sal-3.3-bin-x86_64-unknown-linux-gnu.tar.gz&accept=I+accept" -O sal.tar.gz
+  tar xzvf sal.tar.gz
+
+  echo 'Installing SAL...'
+  ln -s sal-3.3 sal
+  sudo chown -R vagrant:vagrant sal*
+  cd sal
+  ./install.sh
+  cd ..
+  echo "export PATH=\\"$VHOME/sal/bin:\\$PATH\\"" >> $VHOME/.bash_profile
+
+else
+  echo "Using cached SAL installation: $SAL_DIR"
+fi
+
+  SHELL
+end
+
+# Support caching of debian packages on the host
+def local_cache(basebox_name)
+  cache_dir = Vagrant::Environment.new.home_path.join('cache', 'apt', basebox_name)
+  partial_dir = cache_dir.join('partial')
+  partial_dir.mkdir unless partial_dir.exist?
+  cache_dir
+end
