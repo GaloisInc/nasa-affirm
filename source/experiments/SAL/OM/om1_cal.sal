@@ -46,20 +46,20 @@ RELAYS_COUNT: TYPE = [0..num_relays];
 
 % UNCOMMENT the following lines to get an INFINITE model.
 %
-%TIME: TYPE = { t: REAL | t >= -2 };
-%MESSAGE: TYPE = { m: INTEGER | m >= -1 };
-%REAL_MESSAGE: TYPE = { m: MESSAGE | m >= 0 };
-%uninterp_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
+TIME: TYPE = { t: REAL | t >= -2 };
+MESSAGE: TYPE = { m: INTEGER | m >= -1 };
+REAL_MESSAGE: TYPE = { m: MESSAGE | m >= 0 };
+uninterp_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
 
 % UNCOMMENT the following lines to get a FINITE model.
 %
 % This is mostly for debugging purposes, e.g. running 'sal-deadlock-checker'
 % and 'sal-path-finder' over the model.
 %
-upper_bound : INTEGER = 10;  % needs to be larger than largest special msg value
-TIME: TYPE = [-2..upper_bound];
-MESSAGE: TYPE = [-1..upper_bound];
-uninterp_msg(i: IDENTITY, j: IDENTITY): INTEGER = upper_bound;
+%upper_bound : INTEGER = 10;  % needs to be larger than largest special msg value
+%TIME: TYPE = [-2..upper_bound];
+%MESSAGE: TYPE = [-1..upper_bound];
+%uninterp_msg(i: IDENTITY, j: IDENTITY): INTEGER = upper_bound;
 
 
 %=== Nodes and IDs -----------------------------------------------===
