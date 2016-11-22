@@ -56,10 +56,10 @@ uninterp_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
 % This is mostly for debugging purposes, e.g. running 'sal-deadlock-checker'
 % and 'sal-path-finder' over the model.
 %
-%upper_bound : INTEGER = 10;  % needs to be larger than largest special msg value
-%TIME: TYPE = [-2..upper_bound];
-%MESSAGE: TYPE = [-1..upper_bound];
-%uninterp_msg(i: IDENTITY, j: IDENTITY): INTEGER = upper_bound;
+% upper_bound : INTEGER = 10;  % needs to be larger than largest special msg value
+% TIME: TYPE = [-2..upper_bound];
+% MESSAGE: TYPE = [-1..upper_bound];
+% uninterp_msg(i: IDENTITY, j: IDENTITY): INTEGER = upper_bound;
 
 
 %=== Nodes and IDs -----------------------------------------------===
@@ -447,7 +447,8 @@ TRANSITION
    ([] (i:RELAYS):
       receiver_recv:
       mode = receiving AND node_event?(cal, i, p, t) AND buffer[i] = missing -->
-        buffer'[i]   = msg(t, cal, f, i, p);
+        buffer'[i]   = LET m:MESSAGE = msg(t, cal, f, i, p) IN
+                       IF m = bad_msg THEN recv_bad_msg ELSE m ENDIF;
         buffer_size' = buffer_size + 1;
         cal'         = IF buffer_size' = num_relays  % buffer is full
                           THEN LET cal1: CALENDAR = msg_consume(cal, i, p)
@@ -1023,10 +1024,10 @@ fault_propagation: LEMMA system_obs |-
 % 'bad_msg' from it.
 %
 % Proved (currently not used)
-% XXX sal-inf-bmc -i -d 1 -l abstract_all om1_cal manifest_source
+% sal-inf-bmc -i -d 1 -l abstract_all om1_cal manifest_source
 manifest_source: LEMMA system_obs |-
   G(f[source_id] = manifest =>
-      FORALL (i: RELAYS): latches[i] = missing OR latches[i] = bad_msg);
+      FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg);
 
 
 % symmetric_relay - when a relay has a symmetric fault, then the message it
@@ -1050,7 +1051,7 @@ symmetric_relay: LEMMA system_obs |-
 manifest_relay: LEMMA system_obs |-
   G(FORALL (i: RELAYS): f[i] = manifest =>
       FORALL (r: RECEIVERS):
-        buffers[r][i] = missing OR buffers[r][i] = bad_msg);
+        buffers[r][i] = missing OR buffers[r][i] = recv_bad_msg);
 
 
 % A symmetric fault in the source has "no useful interpretation", i.e.
@@ -1136,7 +1137,7 @@ receiver_mode_invt: LEMMA system_obs |-
         AND ixs[r] = relay_id(num_relays)+1
         AND (votes[r] = candidate[r] OR votes[r] = error_vote)
         AND buffer_size[r] = num_relays
-        AND FORALL (i: RELAYS): buffers[r][i] /= missing
+        AND FORALL (i: RELAYS): buffers[r][i] /= missing AND buffers[r][i] /= bad_msg
        )
    );
 
@@ -1235,7 +1236,7 @@ validity: THEOREM system_obs |- G(vfa(f) => v_ok);
 % sal-inf-bmc -i -d 1 \
 %     -l abstract_all -l cal_invt -l fault_propagation \
 %     -l receiver_mode_invt -l majority_vote_invt -l exists_majority \
-%     -l manifest_relay -l symmetric_relay \
+%     -l manifest_source -l manifest_relay -l symmetric_relay \
 %     om1_cal agreement
 %
 % Stats for num_relays=4, num_recvs=4:
