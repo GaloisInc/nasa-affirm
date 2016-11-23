@@ -46,7 +46,7 @@
 
 
 \begin{abstract}
-With proof techniques like property-directed reachability (PDR) and $k$-induction with user-supplied invariants, model-checking scales further than ever before. Still, fault-tolerant distributed systems are particularly challenging to model-check given their large state space and non-determinism. The typical approach to controlling complexity is to construct ad-hoc abstractions of faults, message-passing, and behavior to simplify their behavior. However, these abstractions come at the price of divorcing the model from its implementation and making refactoring difficult. In this work, we present a systematic model for fault-tolerant distributed system verification that combines calendar automata, synchronous observers, and abstract state machines specialized for model-checking. We demonstrate the efficacy of the framework by presenting a the first model-checked implementation of the Oral Messages algorithm then demonstrate how modifications along axes such as the fault model, topology, node behavior, and require only local modifications to the model and proofs.
+With proof techniques like IC3 and $k$-induction with user-supplied invariants, model-checking scales further than ever before. Still, fault-tolerant distributed systems are particularly challenging to model-check given their large state space and non-determinism. The typical approach to controlling complexity is to construct ad-hoc abstractions of faults, message-passing, and behavior to simplify their behavior. However, these abstractions come at the price of divorcing the model from its implementation and making refactoring difficult. In this work, we present a systematic model for fault-tolerant distributed system verification that combines calendar automata, synchronous observers, and abstract state machines specialized for model-checking. We demonstrate the efficacy of the framework by presenting a the first model-checked implementation of the Oral Messages algorithm then demonstrate how modifications along axes such as the fault model, topology, node behavior, and require only local modifications to the model and proofs.
 \end{abstract}
 
 \section{Introduction}
@@ -64,7 +64,7 @@ However, recent advances in model-checking allow for better scalability and mode
 
   (We discuss the applicability of property-directed reachability in Section~\ref{sec:related}.)
 
-Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems in which verification is more automated than in traditional interactive theorem-proving. We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{Dutertre-Sorea}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
+Our contributions combine a number of ideas in the formal verification literature to build scalable, generic formal models of fault-tolerant distributed systems in which verification is more automated than in traditional interactive theorem-proving. We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. The model combines several formalisms from the literature to efficiently but systematically model and verify a broad class of systems. The model extends \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal}. A calendar automata is a model inspired by discrete-event simulation, used in testing real-time systems~\cite{}.  Calendar automata have previously been used to verify bounded asynchronous systems~\cite{}; here we verify a synchronous system.
 
 The model also employs \emph{synchronous observers}~\cite{}. Synchronous observers are a modeling abstraction in which an ``observer'' actor is synchronously composed with the system under verification. We use synchronous observers to compose distinct transition systems modeling the system, environment, assumptions, and requirements. Finally, we use an \emph{abstract state machine}~\cite{}, also composed with the system under verification using synchronous observation. The abstract state machine simplifies discovering invariants and debugging counterexamples.
 
@@ -284,6 +284,9 @@ The verification is interesting in its own right, as it is the first $k$-inducti
 \lee{also note that OM(1) underlies many real-world systems}
 
 \subsection{OM(1) Algorithm}
+
+\lee{rewrite this to be OMH}
+
 The ``Oral Messages'' algorithm solves the Byzantine Generals
 Problem~\cite{Lamport-OM}. The algorithm, $\OM{m}$, is a recursive algorithm, parameterized by the number of rounds of communication, $m$. Consider a finite set of nodes $N$. Distinguish one node as the general, $g$, and the remaining nodes $L = N \setminus \{g\}$ as the lieutenants. The general will broadcast a value to the lieutenants. The goal of the algorithm is for each of the lieutenants to agree on the value sent by $g$ in the presence of a Byzantine faulty general or lieutenants. More precisely, we assume the identity of a sender cannot be spoofed, broadcast communication proceeds in synchronous rounds such that the absence of a message in a round can be detected by the receiver (let $None$ be a constant used when no message is received), and a Byzantine faulty sender can arbitrary corrupt or not send a message, but there are no other faults in the system.
 
@@ -405,13 +408,17 @@ Not sure if we'll have space for this. Maybe just move to the conclusions?
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
 
-The Oral Messages algorithm was presented in the landmark paper by Lamport, Shostak, and Pease~\cite{om}. Later, a hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{csl-93-2}. Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}.
+The Oral Messages algorithm and its variants have a long history of formal verification, making it a good test-case for comparing and contrasting verification tools~\cite{pvs}. The Oral Messages algorithm was presented in the landmark paper by Lamport, Shostak, and Pease~\cite{om}. Later, a hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. OM(1) was subsequently verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement OM(1) is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and OM(1) is specialized to a four-process system. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{csl-93-2}.
+
+Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. That said, their model of OM(1) (not OMH(1)), timeouts after 10~hours, and we assume a voting algorithm is not explicitly specified. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of OM(1) as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
 
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
 
 \lee{talk about compositional verification of properties, even though SAL doesn't directly support it}
+\lee{talk about k-induction vs. PDR}
+\lee{talk about lack of axiomatization in model-checking (multiple rushby bugs), but  tradeoff of deadlock. see proglema paper}
 
 \bibliographystyle{IEEEtran}
 \bibliography{paper}
