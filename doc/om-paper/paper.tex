@@ -38,7 +38,7 @@
 
 \begin{document}
 
-\title{Model-Checking Fault-Tolerant Distributed System Implementations}
+\title{Compositional Model-Checking for Fault-Tolerant Distributed System Implementations}
 \author{Ben and Lee}
 
 
@@ -46,7 +46,7 @@
 
 
 \begin{abstract}
-We present a modeling framework for fault-tolerant distributed system verification.
+With proof techniques like property-directed reachability (PDR) and $k$-induction with user-supplied invariants, model-checking scales further than ever before. Still, fault-tolerant distributed systems are particularly challenging to model-check given their large state space and non-determinism. The typical approach to controlling complexity is to construct ad-hoc abstractions of faults, message-passing, and behavior to simplify their behavior. However, these abstractions come at the price of divorcing the model from its implementation and making refactoring difficult. In this work, we present a systematic model for fault-tolerant distributed system verification that combines calendar automata, synchronous observers, and abstract state machines specialized for model-checking. We demonstrate the efficacy of the framework by presenting a the first model-checked implementation of the Oral Messages algorithm then demonstrate how modifications along axes such as the fault model, topology, node behavior, and require only local modifications to the model and proofs.
 \end{abstract}
 
 \section{Introduction}
@@ -405,11 +405,13 @@ Not sure if we'll have space for this. Maybe just move to the conclusions?
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
 
-There is a long history of formally verifying fault-tolerant distributed systems. Most previous work has used mechanical theorem-proving, given the complexity of these systems and models. OM(1) is a particularly good case-study that has a history of verification. Most
+The Oral Messages algorithm was presented in the landmark paper by Lamport, Shostak, and Pease~\cite{om}. Later, a hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{csl-93-2}. Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}.
 
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
+
+\lee{talk about compositional verification of properties, even though SAL doesn't directly support it}
 
 \bibliographystyle{IEEEtran}
 \bibliography{paper}
