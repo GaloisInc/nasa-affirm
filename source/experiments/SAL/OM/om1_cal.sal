@@ -169,6 +169,15 @@ error_vote:   MESSAGE = 3;  % indicates an error in the voting, e.g. if no
                             %   non- bad messages were received
 missing:     MESSAGE = -1;  % used as a placeholder initial value
 
+% Change a 'bad_msg' into the special value 'recv_bad_msg' before it is stored
+% in a latch or a buffer.
+store_it(m: MESSAGE): MESSAGE = IF m = bad_msg OR m = missing
+                                   THEN recv_bad_msg
+                                   ELSE m ENDIF;
+
+% Check is a message value has been stored and is not the special missing
+% value.
+is_stored?(m: MESSAGE): BOOLEAN = m /= missing AND m /= bad_msg;
 
 % Values produced by reading from the calendar are constrained to be "real"
 % messages. Additional constraints are added by the hybrid fault model's maximum
@@ -391,11 +400,9 @@ TRANSITION
       (NOT relay_done) AND node_event?(cal, source_id, i, t) -->
         % acknowledge a manifestly bad message by storing and passing on a
         % designated value 'recv_bad_msg'
-        latch' = LET m:MESSAGE = msg(t, cal, f, source_id, i)  IN
-                 IF m = bad_msg THEN recv_bad_msg ELSE m ENDIF;
-        cal' = LET m:MESSAGE = msg(t, cal, f, source_id, i)  IN
-               LET m1:MESSAGE = (IF m = bad_msg THEN recv_bad_msg ELSE m ENDIF) IN
-               LET cal1:CALENDAR = msg_relay_bcast(cal, i, m1, t) IN
+        latch' = store_it(msg(t, cal, f, source_id, i));
+        cal' = LET m:MESSAGE = store_it(msg(t, cal, f, source_id, i)) IN
+               LET cal1:CALENDAR = msg_relay_bcast(cal, i, m, t) IN
                msg_consume(cal1, source_id, i);
         relay_done' = TRUE
     ]
@@ -447,8 +454,7 @@ TRANSITION
    ([] (i:RELAYS):
       receiver_recv:
       mode = receiving AND node_event?(cal, i, p, t) AND buffer[i] = missing -->
-        buffer'[i]   = LET m:MESSAGE = msg(t, cal, f, i, p) IN
-                       IF m = bad_msg THEN recv_bad_msg ELSE m ENDIF;
+        buffer'[i]   = store_it(msg(t, cal, f, i, p));
         buffer_size' = buffer_size + 1;
         cal'         = IF buffer_size' = num_relays  % buffer is full
                           THEN LET cal1: CALENDAR = msg_consume(cal, i, p)
@@ -672,7 +678,7 @@ BEGIN
                 AND latches[i] = missing)
          AND (FORALL (i: RELAYS): relays_done[i] =>
                 null?(cal, chan(source_id, i))
-                AND latches[i] /= missing)
+                AND is_stored?(latches[i]))
          AND (EXISTS (i: RELAYS): relays_done[i])
          AND (FORALL (r: RECEIVERS): NOT receivers_done[r]
                 AND null?(cal, chan(r,r))
@@ -686,7 +692,7 @@ BEGIN
                     AND buffers[j][i] = missing)
                 OR (    relays_done[i]
                     AND null?(cal, chan(i,j))
-                    AND buffers[j][i] /= missing
+                    AND is_stored?(buffers[j][i])
                     AND (NOT is_faulty?(f[i]) => buffers[j][i] = latches[i]))
              );
 
@@ -694,7 +700,7 @@ BEGIN
     A3b =      source_done
           AND (FORALL (i: RELAYS): relays_done[i]
                  AND null?(cal, chan(source_id, i))
-                 AND latches[i] /= missing)
+                 AND is_stored?(latches[i]))
           AND (FORALL (r: RECEIVERS):
                  NOT receivers_done[r]
                  AND votes[r] = missing)
@@ -702,7 +708,7 @@ BEGIN
                     (    cal.msg[chan(i,j)] = latches[i]
                      AND buffers[j][i] = missing)
                  OR (    null?(cal, chan(i,j))
-                     AND buffers[j][i] /= missing
+                     AND is_stored?(buffers[j][i])
                      AND (NOT is_faulty?(f[i]) => buffers[j][i] = latches[i]))
              );
 
@@ -710,7 +716,7 @@ BEGIN
     A4 =     source_done
          AND (FORALL (i: RELAYS): relays_done[i]
                 AND null?(cal, chan(source_id, i))
-                AND latches[i] /= missing)
+                AND is_stored?(latches[i]))
          AND (EXISTS (r: RECEIVERS): receivers_done[r])
          AND (FORALL (r: RECEIVERS): receivers_done[r] =>
                 (   EXISTS (i: RELAYS): votes[r] = buffers[r][i]
@@ -724,7 +730,7 @@ BEGIN
                    (    cal.msg[chan(i,j)] = latches[i]
                     AND buffers[j][i] = missing)
                 OR (    null?(cal, chan(i,j))
-                    AND buffers[j][i] /= missing
+                    AND is_stored?(buffers[j][i])
                     AND (NOT is_faulty?(f[i]) => buffers[j][i] = latches[i]))
              );
 
@@ -732,13 +738,13 @@ BEGIN
     A5 =     source_done
          AND (FORALL (i: RELAYS): relays_done[i]
                 AND null?(cal, chan(source_id, i))
-                AND latches[i] /= missing)
+                AND is_stored?(latches[i]))
          AND (FORALL (r: RECEIVERS): receivers_done[r]
                 AND (   EXISTS (i: RELAYS): votes[r] = buffers[r][i]
                      OR votes[r] = error_vote)
                 AND null?(cal, chan(r,r)))
          AND (FORALL (i: RELAYS, j: RECEIVERS): null?(cal, chan(i,j))
-                AND buffers[j][i] /= missing
+                AND is_stored?(buffers[j][i])
                 AND (NOT is_faulty?(f[i]) => buffers[j][i] = latches[i]));
   TRANSITION
     [ ELSE --> ]
@@ -838,6 +844,7 @@ abstract_a5:   LEMMA system_obs |- G(state = a5 => A5);
 %     -l abstract_a1 -l abstract_a2 -l abstract_a3 \
 %     -l abstract_a3b -l abstract_a4 -l abstract_a5 \
 %     -l cal_invt -l lemma_relays -l receiver_mode_invt \
+%     -l fault_propagation \
 %     om1_cal abstract_invt
 %
 abstract_invt: LEMMA system_obs |- G(state /= bad);
@@ -907,6 +914,16 @@ symmetric_fault_constraint(f: FAULTS): BOOLEAN =
 % model is not observable since the receivers don't send any messages.
 receiver_fault_constraint(f: FAULTS): BOOLEAN =
   FORALL (r: RECEIVERS): f[r] = nonfaulty;
+
+% Basic fault assumption
+%
+% This predicate over the fault array enforces our notion of symmetric fault
+% and makes the simplifying (but non-essential) assumption that the receivers
+% are not faulty.
+%
+bfa(f: FAULTS): BOOLEAN =
+      receiver_fault_constraint(f)
+  AND symmetric_fault_constraint(f);
 
 % Maximum fault assumption
 %
@@ -1021,25 +1038,28 @@ fault_propagation: LEMMA system_obs |-
 
 
 % manifest_source - when the source is manifestly faulty, relays will only get
-% 'bad_msg' from it.
+% 'bad_msg' from it and they will only store 'recv_bad_msg'.
 %
 % Proved (currently not used)
-% sal-inf-bmc -i -d 1 -l abstract_all om1_cal manifest_source
+% sal-inf-bmc -i -d 1 -l abstract_all -l fault_propagation om1_cal manifest_source
 manifest_source: LEMMA system_obs |-
-  G(f[source_id] = manifest =>
-      FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg);
+  G((f[source_id] = manifest =>
+      FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg)
+    AND
+    (EXISTS (i: RELAYS): latches[i] = recv_bad_msg => is_faulty?(f[source_id])));
 
 
 % symmetric_relay - when a relay has a symmetric fault, then the message it
-% sends to the receiver is determined completly by the relay and receiver id.
+% sends to the receiver is determined completely by the relay and receiver id.
 %
 % Proved
 % sal-inf-bmc -i -d 1 -l abstract_all om1_cal symmetric_relay
 symmetric_relay: LEMMA system_obs |-
-  G(FORALL (i: RELAYS): f[i] = symmetric =>
-      FORALL (r: RECEIVERS):
-        (   buffers[r][i] = missing
-         OR buffers[r][i] = uninterp_msg(i, r))
+  G(bfa(f) =>
+      FORALL (i: RELAYS, j: RECEIVERS):
+        f[i] = symmetric =>
+        (   buffers[j][i] = missing
+         OR buffers[j][i] = store_it(uninterp_msg(i, j)))
    );
 
 
@@ -1115,6 +1135,7 @@ receiver_mode_invt: LEMMA system_obs |-
               AND ixs[r] = 0
               AND buffer_size[r] = num_relays
               AND candidate[r] = missing
+              %AND FORALL (i: RELAYS): is_stored?(buffers[r][i])
               AND FORALL (i: RELAYS): buffers[r][i] /= missing
              )
              % receiver starts voting by initializing state variables
@@ -1127,6 +1148,7 @@ receiver_mode_invt: LEMMA system_obs |-
               AND (   EXISTS (i: RELAYS): (buffers[r][i] = candidate[r] AND i < ixs[r])
                    OR candidate[r] = missing)
               AND buffer_size[r] = num_relays
+              %AND FORALL (i: RELAYS): is_stored?(buffers[r][i])
               AND FORALL (i: RELAYS): buffers[r][i] /= missing
              )
          )
@@ -1137,7 +1159,8 @@ receiver_mode_invt: LEMMA system_obs |-
         AND ixs[r] = relay_id(num_relays)+1
         AND (votes[r] = candidate[r] OR votes[r] = error_vote)
         AND buffer_size[r] = num_relays
-        AND FORALL (i: RELAYS): buffers[r][i] /= missing AND buffers[r][i] /= bad_msg
+        %AND FORALL (i: RELAYS): is_stored?(buffers[r][i])
+        AND FORALL (i: RELAYS): buffers[r][i] /= missing
        )
    );
 
