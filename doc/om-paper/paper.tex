@@ -394,9 +394,34 @@ Finally, the fault model lemmas relate the fault model to the system. The \emph{
 
 \begin{figure}
   \centering
-  \includegraphics[width=8cm]{figs/benchmark}
-  \caption{Comparison of number of nodes vs. verification time.}
-  \label{fig:compare}
+  \begin{tabular}{r||c|c|c|c|c|c|c|c|c|c|}
+      \multicolumn{11}{c}{Receivers} \\
+      \cline{2-11}
+   Relays &   1 &   2 &   3 &   4 &   5 &   6 &   7 &   8 &   9 &   10 \\
+      \hline \hline
+      1   & 13  & 18  & 23  & 29  & 35  & 43  & 54  & 70  & 90  & 129 \\
+      \hline
+      2   & 17  & 26  & 38  & 52  & 68  & 89  & 115 & 159 & 227 &     \\
+      \hline
+      3   & 21  & 40  & 61  & 85  & 120 & 170 & 246 & 410 &     &     \\
+      \hline
+      4   & 27  & 58  & 98  & 195 & 213 & 628 & 855 &     &     &     \\
+      \hline
+      5   & 36  & 93  & 292 & 389 & 1940& TO  &     &     &     &     \\
+      \hline
+      6   & 56  & 303 & 976 & TO  & TO  &     &     &     &     &     \\
+      \hline
+      7   & 114 & 1993& TO  & TO  &     &     &     &     &     &     \\
+      \hline
+      8   & 338 & TO  & TO  &     &     &     &     &     &     &     \\
+      \hline
+      9   & 895 & TO  &     &     &     &     &     &     &     &     \\
+      \hline
+     10   & TO  &     &     &     &     &     &     &     &     &     \\
+      \hline
+  \end{tabular}
+  \label{fig:benchmark}
+  \caption{Benchmark of full proof computation time for OMH(1) implementation. Times are in seconds with a timeout limit of one hour.}
 \end{figure}
 
 % ------------------------------------------------------------
