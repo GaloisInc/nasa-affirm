@@ -141,6 +141,8 @@ The event of receiving a message initiates a process to update its local state m
 
 \lee{note that we don't need full generality of send and receive events in OM(1)}
 
+\lee{note that we use calendar automata for non real-time system}
+
 \subsection{Synchronous Observers}\label{sec:sync}
 Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables. Synchronous observers are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the domain~\cite{}. The general form for specifying a system using synchronous observers is the following:
 $$\mathcal{S} | \mathcal{E} | \mathcal{A} | \mathcal{R}$$
@@ -272,37 +274,29 @@ Our use of ASMs to improve traceability is even more restrictive. We construct a
 % ------------------------------------------------------------
 \section{Putting it Together: Compositional Modeling and Verification for Oral Messages}\label{sec:byz}
 
-To demonstrate the model and techniques, we model the classic OM(1) Byzantine fault-tolerant algorithm~\cite{} in our framework. OM(1) has been modeled in a variety of formal tools~\cite{}, providing a nice comparison with our work. Then, we make modifications to the OM(1) model, and show the model's resilience to those changes. By ``resilience'', we mean that only a small, localized portion of the must be modified, and only a small set of lemmas must be modified.
+To demonstrate the model and techniques, we model the Oral Messages Hybrid (OMH) algorithm~\cite{}, a more sophisticated version of the class Oral Messages (OM) algorithm. OM was first formulated by Lamport, Shostak, and Pease~\cite{om} to achieve agreement in a distributed system while tolerating Byzantine faults. OMH was originally developed by Thambidurai and Park~\cite{hybrid} to achieve the same result in the presence of a more sophisticated fault model that includes symmetric and benign faults. However, OMH had a bug, as originally formulated, which was corrected and formally verified by Lincoln and Rushby~\cite{csl-93-2}.
 
-The dimensions along which we make changes are the following: the fault model, topology, local node behavior, and synchronization. \lee{Did we complete these?}
+First, we briefly describe the algorithm, sketch our model of the algorithm within the model presented in Section~\ref{sec:model}, then describe it's invariants.
 
-The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{}.
+\subsection{OMH(1) Algorithm}
+OMH is a recursive algorithm that proceeds in rounds of communication. Let $OMH(m)$ be a recursive function implementing the algorithm, parameterized by the number of rounds, $m$. Consider a finite set of nodes $N$. Distinguish one node as the \emph{general}, $g$, and the remaining nodes $L = N \setminus \{g\}$ as the \emph{lieutenants}. We assume the identity of any general or lieutenant cannot be spoofed. Broadcast communication proceeds in rounds. Denote any message that is detectably faulty (e.g., fails a CRC) or is absent, by $ERR$. Additionally, in the algorithm, nodes report on values they have previously received. In doing so, nodes must differentiate \emph{reporting} $ERR$ from an $ERR$ itself. Let $R$ denote that an error is being reported. Finally, let $V$ be a special, designated value.
 
-The verification is interesting in its own right, as it is the first $k$-induction based verification over a fully-parameterized OM(1) model (we describe this in more detail in Section~\ref{sec:related}).
+%% The goal of the algorithm is for each of the lieutenants to agree on the value sent by $g$ in the presence of a Byzantine faulty general or lieutenants. More precisely, we assume the identity of a sender cannot be spoofed, broadcast communication proceeds in synchronous rounds such that the absence of a message in a round can be detected by the receiver (let $None$ be a constant used when a message is detectably incorrect, including a lack of message), and a Byzantine faulty sender can arbitrary corrupt or not send a message, but there are no other faults in the system.
 
-\lee{also note that OM(1) underlies many real-world systems}
-
-\subsection{OM(1) Algorithm}
-
-\lee{rewrite this to be OMH}
-
-The ``Oral Messages'' algorithm solves the Byzantine Generals
-Problem~\cite{Lamport-OM}. The algorithm, $\OM{m}$, is a recursive algorithm, parameterized by the number of rounds of communication, $m$. Consider a finite set of nodes $N$. Distinguish one node as the general, $g$, and the remaining nodes $L = N \setminus \{g\}$ as the lieutenants. The general will broadcast a value to the lieutenants. The goal of the algorithm is for each of the lieutenants to agree on the value sent by $g$ in the presence of a Byzantine faulty general or lieutenants. More precisely, we assume the identity of a sender cannot be spoofed, broadcast communication proceeds in synchronous rounds such that the absence of a message in a round can be detected by the receiver (let $None$ be a constant used when no message is received), and a Byzantine faulty sender can arbitrary corrupt or not send a message, but there are no other faults in the system.
-
-The algorithm proceeds as follows:
+The algorithm is recursively defined:
 
 \begin{itemize}
-\item {\bf $OM(0)$}: $g$ broadcasts a value to each lieutenant, and the lieutenants return the value received (or $None$).
+\item {\bf $OM(0)$}: $g$ broadcasts a value to each lieutenant, and the lieutenants return the value received (or $ERR$).
 \item {\bf $OM(m)$, $m > 0$}:
   \begin{enumerate}
   \item $g$ broadcasts a value to each lieutenant, $l$.
-  \item\label{om:two} Let $v$ be the value received by $l$. Then for each $l$, execute $OM(m-1)$ with general $l$ and lieutenants $L \setminus \{l\}$.
-  \item For each lieutenant $l$, output the majority value received from the other lieutenants.
+  \item\label{om:two} Let $l_v$ be the value received by $l \in L$ from $g$. Then for each $l$, execute $OMH(m-1)$, assigning $l$ to be the general and $L \setminus \{l\}$ to be the lieutenants. $l$ sends $l_v$ or $R$, if $l_v = ERR$.
+  \item For each lieutenant $l \in L$, remove all $ERR$ values received in Step~\ref{om:two} from executing $OHM(m-1)$. Compute the majority value over the remaining values, or $V$ if there is no majority. If the majority value is $R$, return $E$.
   \end{enumerate}
 \end{itemize}
 
 \noindent
-Therefore, $OM(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
+In particular, $OMH(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
 
 %% parameterized by the
 %% number of rounds of message relay. Here, we focus on Oral Messages with one
@@ -342,8 +336,8 @@ Therefore, $OM(1)$ includes two rounds of broadcast communication, one in which 
 %% \label{fig:om1}
 %% \end{figure}
 
-OM(1) is designed to preserve \emph{validity} and \emph{agreement}
-properties. Validity states that if the general is non-faulty, then every lieutenant outputs the value sent by the general. More formally, let the general broadcast $v$, and let $l_i$ denote the output for lieutenant $i$:
+OMH is designed to preserve \emph{validity} and \emph{agreement}
+properties. Validity states that if the general is non-faulty, then every lieutenant outputs the value sent by the general. More formally, let the general broadcast $v \neq ERR$, and let $l_i$ denote the output for lieutenant $i$:
 %
 \begin{equation}
   \tag{Validity}
@@ -358,16 +352,16 @@ Agreement states that each lieutenant outputs the same value. Let $l_i, l_j$ den
 \end{equation}
 %
 
-$OM(m)$ was originally designed to tolerate Byzantine faults. It is classic
-result that $OM(m)$ satisifies validity and agreement if the number of
-nodes is at least $3m+1$, and there no more than $m$
-Byzantine faulty nodes~\cite{}.
-
-The fault model of $OM(1)$ has been extended to hybrid fault model described in Section~\ref{sec:kibitzer}. Under that fault model, the hypothesis for proving validity and agreement can be weakened to assuming there must be at least $2a+2s+b+1$ nodes, where $a$ is the number of Byzantine (or asymmetric) faults, $s$ is the number of symmetric faults, and $b$ is the number of benign faults. \lee{is the right?}
+We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that fault model, agreement and validity hold if $2a+2s+b+1 \geq n$, where $n$ is the total number of nodes, $a$ is the number of Byzantine (or asymmetric) faults, $s$ is the number of symmetric faults, and $b$ is the number of benign faults. Additionally, it is required that the number of rounds $m$ be greater or equal to the number of Byzantine faults, $a$~\cite{csl-93-2,hybrid}.
 
 \subsection{Model Sketch}
+The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{}.
+
+\lee{Maybe talk about MJRTY here. Maybe also talk about relaxing in synchronous communication in model.}
 
 \subsection{Invariants}
+
+\lee{make clear we're agnostic about human-provided invariants. We conjecture some can be auto-generated. Some might be inferred by IC3.}
 
 \begin{figure}
   \centering
@@ -391,7 +385,9 @@ Finally, the fault model lemmas relate the fault model to the system. The \emph{
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
 
-\lee{let's also check out scalability when we ``turn off'' faults. Also, how hard is it to turn them off or change the fault model? E.g., how many lines of spec need to be changed? Compare to rushby's?}
+Here we present two classes of experimental results. First, we demonstrate the scalability results of the verification, despite the low-level modeling. Then we describe modularity results, demonstrated by making modifications to the model and re-validating the model.
+
+\subsection{Scalability}
 
 \begin{figure}
   \centering
@@ -425,6 +421,12 @@ Finally, the fault model lemmas relate the fault model to the system. The \emph{
   \caption{Benchmark of full proof computation time for OMH(1) implementation. Times are in seconds with a timeout (TO) limit of one hour. Dashes ('-') denote no benchmark was run.}
 \end{figure}
 
+\lee{let's also check out scalability when we ``turn off'' faults. Also, how hard is it to turn them off or change the fault model? E.g., how many lines of spec need to be changed? Compare to rushby's?}
+
+
+\subsection{Modular Verification}
+
+
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
 
@@ -433,6 +435,8 @@ The Oral Messages algorithm and its variants have a long history of formal verif
 Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. That said, their model of OM(1) (not OMH(1)), timeouts after 10~hours, and we assume a voting algorithm is not explicitly specified. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of OM(1) as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
 
 \url{https://people.eecs.berkeley.edu/~apanda/assets/papers/pldi16.pdf}
+
+\lee{mention that ASMs similar to disjunction invariants}
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
