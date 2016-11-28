@@ -11,6 +11,10 @@
 \usepackage{amsfonts}
 
 \usepackage{tikz}
+\usetikzlibrary{arrows,automata}
+\usepackage{tikz-cd}
+\usetikzlibrary{positioning}
+
 \newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}}
 
 %% IEEE
@@ -269,6 +273,8 @@ where $b_0, b_1, \ldots, b_n$ are arbitrary Boolean combinations of the predicat
 
 Our use of ASMs to improve traceability is even more restrictive. We construct an ASM $\mathcal{M}$ that is synchronously composed with the system specification $\mathcal{S}$. Each state of the ASM represents a ``configurations'' of $S$ and is associated with some predicate over the states of $\mathcal{S}$.
 
+\lee{note that the ASM is not a refinement.}
+
 % ------------------------------------------------------------
 
 % ------------------------------------------------------------
@@ -358,10 +364,11 @@ We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that faul
 The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, which contains a suite of model-checkers and a high-level specification language. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{}.
 
 \lee{Maybe talk about MJRTY here. Maybe also talk about relaxing in synchronous communication in model.}
+\lee{talk about synchrony being loosened, so the general/receivers don't all send/receive at the same time. Talk about lieutenants being ``unrolled'' into relays and receivers, following Rushby.}
 
 \subsection{Invariants}
-To make the proof scalable, we specify inductive invariants to be used by SAL's $k$-induction engine. The invariants are modular, focused on specific aspects of the model.
 
+%% Lemmas and dependencies:
 %% cal:
 %%   cal_invt (-)
 
@@ -370,7 +377,7 @@ To make the proof scalable, we specify inductive invariants to be used by SAL's 
 
 %% faults:
 %%   manifest_relay (-)
-%%   symmetric_relay (-)
+%%   uninterp_msg_relay (-)
 %%   fault_propagation (cal_invt)
 %%   source_to_latch (fault_propagation)
 %%   manifest_source (fault_propagation)
@@ -389,24 +396,45 @@ To make the proof scalable, we specify inductive invariants to be used by SAL's 
 
 \begin{figure}
   \centering
-%%   \begin{tabular}{r|c|c|c|c|c|}
-%%              & (a) Calendar & (b) ASM & (c) Protocol & (d) Voting & (e) Fault model \\
-%%     \hline \hline
-%%       Lemmas & 2            & 1       & 3            & 4          & 5 \\
-%% Dependencies &              & (a), (d),         &              &            &   \\
-%%   \end{tabular}
-  %% \includegraphics[width=\textwidth]{figs/proof-structure}
-  \caption{Invariant classification.}
+  \footnotesize
+  \begin{tikzpicture}[->, node distance=2.6cm, auto, shorten >=1pt, bend angle=45,thick]
+    \tikzstyle{every state}=[rectangle, rounded corners]
+
+    \node[state] (calendar) {calendar (5)};
+    \node[state] (lieutenant) [right=1.75cm of calendar] {\begin{tabular}{c}lieutenant\\state-machine (2)\end{tabular}};
+    \node[state] (faults) [below=0.5cm of calendar] {faults (5)};
+    \node[state] (asm) [right=0.5cm of faults] {ASM (1)};
+    \node[state] (voting) [below=0.5cm of lieutenant] {voting (2)};
+
+    \tikzstyle{every node}=[]
+
+    \path
+    (faults) edge [] node {} (calendar)
+    (asm)    edge [] node {} (calendar)
+    (asm)    edge [] node {} (lieutenant)
+    (voting) edge [] node {} (lieutenant);
+
+  \end{tikzpicture}
+  \caption{Invariant classification and dependencies.}
   \label{fig:proof}
 \end{figure}
 
-The lemmas fall into five categories: calendar automata lemmas, abstract state machine lemmas, protocol behavior lemmas, majority vote lemmas, and fault model lemmas.
+To make the proof scalable, we specify inductive invariants to be used by SAL's $k$-induction engine. The invariants are modular. There are 11 invariants, that fall into five categories:
+\begin{enumerate}
+  \item \emph{Calendar automata}: Lemmas relating to the calendar automata model. These include lemmas such as time being monotonic, channels missing messages if there is no calendar event, and only nodes associated with a calendar event may execute their local state machines.
+  \item \emph{Abstract state machine (ASM)}: Lemmas relating the ASM synchronous observer states to the implementation states.
+  \item \emph{Lieutenant local state-machine (SM) behavior}: Lemmas describing the modes of behavior of the lieutenants. The major modes of the state machine are receiving messages, then once it has filled its buffer, it votes, and after voting returns the result. One additional lemma notes that the messages currently received plus missing messages equals the total number of expected messages.
+  \item \emph{Faults}: Lemmas characterizing the effect of a fault in a single broadcast. For example, a lieutenant reports that it ``received an error'' when it receives a benignly-faulty message.
+  \item \emph{Voting}: Lemmas proving that the Fast Majority Vote algorithm implements a majority vote, if one exists. These lemmas are nearly verbatim transcriptions from the journal proofs~\cite{mjrty}.
+\end{enumerate}
+\noindent
+The proof structure is shown in Figure~\ref{fig:proof}. The number of lemmas per category are shown in parentheses. Arrows denote dependencies. For example, the ASM lemmas depend on both the calendar automata and lieutenant state-machine lemmas.
 
 
 \lee{make clear we're agnostic about human-provided invariants. We conjecture some can be auto-generated. Some might be inferred by IC3.}
 
 
-The proof structure is shown in Figure~\ref{fig:proof}. The two graphs show the structure to prove validity and agreement, respectively. The nodes group related lemmas, and a directed edge from node $a$ to $b$ means lemmas of $b$ depend on $a$. For readability, we have replicated lemmas shared in the proofs of validity and agreement. Additionally, we have elided the dependencies between the lemmas within each node. The proofs are all $k=1$ inductive.
+ The two graphs show the structure to prove validity and agreement, respectively. The nodes group related lemmas, and a directed edge from node $a$ to $b$ means lemmas of $b$ depend on $a$. For readability, we have replicated lemmas shared in the proofs of validity and agreement. Additionally, we have elided the dependencies between the lemmas within each node. The proofs are all $k=1$ inductive.
 
 
 The calendar automata lemmas do not concern the system. The \emph{cal\_invt} lemma is a conjunction of basic properties about the calendar automata, essentially characterizing the axiomatization described in Section~\ref{sec:calendar}. Additionally, the \emph{missing\_buffer\_size} lemma relates the calendar to a node's message buffer: the messages received added to the empty messages equals the total number of possible messages to receive.
@@ -481,6 +509,8 @@ Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthe
 \lee{talk about lack of axiomatization in model-checking (multiple rushby bugs), but  tradeoff of deadlock. see proglema paper}
 
 \lee{talk about atom-sally}
+
+\lee{note some details still elided for implementation ---e.g., CRCs, etc.}
 
 \section*{Acknowledgments}
 \lee{NASA contract, honeywell ppl, rushby's model?}
