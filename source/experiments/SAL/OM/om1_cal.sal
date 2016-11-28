@@ -835,8 +835,7 @@ system_obs : MODULE = system || observer || abstractor || abstract_monitor;
 % % sal-inf-bmc  -d 1 om1_cal abstract_init
 % abstract_init: LEMMA system_obs |- A1;
 
-% abstract_all - conjunction of all the state predicates and the
-% 'abstract_invt'
+% abstract_all - conjunction of all the state predicates
 %
 % Proved:
 % sal-inf-bmc -i -d 1 \
@@ -851,23 +850,6 @@ abstract_all: LEMMA system_obs |-
     AND (state = a4 => A4)
     AND (state = a5 => A5)
     AND (state /= bad));
-
-% order_of_done - prove that nodes finish in the expected order
-%
-%   1. before any relay is done, the source must be
-%   2. before any receiver is done, all relays must be
-%
-% Proved:
-% not used in main proofs: sal-inf-bmc -i -d 1 -l abstract_invt om1_cal order_of_done
-%
-order_of_done: LEMMA
-system_obs |-
-  G(    (EXISTS (i: RELAYS): relays_done[i]) => source_done
-    AND (EXISTS (r: RECEIVERS): receivers_done[r] =>
-           FORALL (i: RELAYS): relays_done[i]
-        )
-  );
-
 
 %%%  Fault Assumptions
 
@@ -983,25 +965,6 @@ cal_invt: LEMMA system_obs |-
     AND missing_cal(cal)
     AND unique_atomic(cal)
    );
-
-
-% lemma_relays - needed to prove 'abstract_invt'
-%
-% Proved:
-% sal-inf-bmc -i  -d 1 -l cal_invt om1_cal lemma_relays
-%
-lemma_relays: LEMMA
-system_obs |-
-  G(FORALL(i: RELAYS):
-          (NOT relays_done[i] => FORALL (r: RECEIVERS):
-                                   null?(cal, chan(i, r)) AND buffers[r][i] = missing)
-      AND (    relays_done[i] => FORALL (r: RECEIVERS):
-                                      (null?(cal, chan(i, r))
-                                       AND buffers[r][i] /= missing)
-                                   OR (NOT null?(cal, chan(i, r))
-                                       AND buffers[r][i] = missing))
-  );
-
 
 % fault_propagation - connect the presence of faulty messages in the calendar
 % with the fault status of upstream nodes
