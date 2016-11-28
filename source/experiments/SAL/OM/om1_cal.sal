@@ -1003,27 +1003,13 @@ source_to_latch: LEMMA system_obs |-
 % manifest_source - when the source is manifestly faulty, relays will only get
 % 'bad_msg' from it and they will only store 'recv_bad_msg'.
 %
-% Proved (currently not used)
+% Proved
 % sal-inf-bmc -i -d 1 -l abstract_all -l fault_propagation om1_cal manifest_source
 manifest_source: LEMMA system_obs |-
   G((f[source_id] = manifest =>
       FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg)
     AND
     (EXISTS (i: RELAYS): latches[i] = recv_bad_msg => is_faulty?(f[source_id])));
-
-% symmetric_relay - when a relay has a symmetric fault, then the message it
-% sends to the receiver is determined completely by the relay and receiver id.
-%
-% Proved
-% sal-inf-bmc -i -d 1 -l abstract_all om1_cal symmetric_relay
-symmetric_relay: LEMMA system_obs |-
-  G(bfa(f) =>
-      FORALL (i: RELAYS, j: RECEIVERS):
-        f[i] = symmetric =>
-        (   buffers[j][i] = missing
-         OR buffers[j][i] = uninterp_msg(i, j))
-   );
-
 
 % manifest_relay - when a relay is manifestly faulty, receivers will only get
 % 'bad_msg' from it.
@@ -1218,7 +1204,7 @@ validity: THEOREM system_obs |- G(vfa(f) => v_ok);
 % sal-inf-bmc -i -d 1 \
 %     -l abstract_all -l cal_invt -l fault_propagation \
 %     -l receiver_mode_invt -l majority_vote_invt -l exists_majority \
-%     -l manifest_source -l manifest_relay -l symmetric_relay \
+%     -l manifest_source -l manifest_relay \
 %     -l source_to_latch \
 %     om1_cal agreement
 %
