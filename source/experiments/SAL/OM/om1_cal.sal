@@ -1010,17 +1010,17 @@ manifest_relay: LEMMA system_obs |-
       FORALL (r: RECEIVERS):
         buffers[r][i] = missing OR buffers[r][i] = bad_msg);
 
-% symmetric_relay - when a relay has a symmetric fault, then the message it
-% sends to the receiver is determined completely by the relay and receiver id.
+% uninterp_msg_relay - when a relay has a byzantine or symmetric fault, then
+% the message it sends to the receiver is uninterpreted (symmetric faults
+% are further constrained by the symmetric_fault_constraint).
 %
 % Proved
-% sal-inf-bmc -i -d 1 om1_cal symmetric_relay
-symmetric_relay: LEMMA system_obs |-
-  G(bfa(f) =>
-      FORALL (i: RELAYS, j: RECEIVERS):
-        f[i] = symmetric =>
-        (   buffers[j][i] = missing
-         OR buffers[j][i] = uninterp_msg(i, j))
+% sal-inf-bmc -i -d 1 om1_cal uninterp_msg_relay
+uninterp_msg_relay: LEMMA system_obs |-
+  G(FORALL (i: RELAYS, j: RECEIVERS):
+      (f[i] = byzantine OR f[i] = symmetric) =>
+         (   buffers[j][i] = missing
+          OR buffers[j][i] = uninterp_msg(i, j))
    );
 
 % manifest_source - when the source is manifestly faulty, relays will only get
@@ -1033,30 +1033,6 @@ manifest_source: LEMMA system_obs |-
       FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg)
     AND
     (EXISTS (i: RELAYS): latches[i] = recv_bad_msg => is_faulty?(f[source_id])));
-
-% A symmetric fault in the source has "no useful interpretation", i.e.
-% w.l.o.g. is equivalent to a non-faulty source with a different message.
-%
-% So the LEMMA here is provable, but not useful.
-%
-% % If a is not missing, then a, else b
-% iata(a: MESSAGE, b:MESSAGE): MESSAGE =
-%   IF a /= missing THEN a ELSE b ENDIF;
-%
-% symmetric_source: LEMMA system_obs |-
-%   G(source_done AND symmetric_fault_constraint(f) AND f[source_id] = symmetric =>
-%           % each relay either has a message waiting, or has set its latch
-%           (FORALL (i: RELAYS):
-%              iata(cal.msg[chan(source_id, i)], latches[i]) /= missing)
-%       AND (FORALL (i: RELAYS):
-%              relays_done[i] => ;;
-%           % the non-missing value in cal or latch agrees for all relays
-%       AND (FORALL (i,j: RELAYS):
-%              iata(cal.msg[chan(source_id, i)], latches[i]) =
-%              iata(cal.msg[chan(source_id, j)], latches[j]))
-%    );
-
-
 
 % missing_buffer_size - for each receiver: # messages currently received +
 % # of slots with 'missing' = total number of relays.
@@ -1204,7 +1180,7 @@ validity: THEOREM system_obs |- G(vfa(f) => v_ok);
 % sal-inf-bmc -i -d 1 \
 %     -l abstract_all -l cal_invt -l fault_propagation \
 %     -l receiver_mode_invt -l majority_vote_invt -l exists_majority \
-%     -l manifest_relay -l symmetric_relay -l manifest_source \
+%     -l manifest_relay -l uninterp_msg_relay -l manifest_source \
 %     -l source_to_latch \
 %     om1_cal agreement
 %
