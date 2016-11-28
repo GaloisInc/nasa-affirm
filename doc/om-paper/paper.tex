@@ -360,19 +360,54 @@ The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, whi
 \lee{Maybe talk about MJRTY here. Maybe also talk about relaxing in synchronous communication in model.}
 
 \subsection{Invariants}
+To make the proof scalable, we specify inductive invariants to be used by SAL's $k$-induction engine. The invariants are modular, focused on specific aspects of the model.
 
-\lee{make clear we're agnostic about human-provided invariants. We conjecture some can be auto-generated. Some might be inferred by IC3.}
+%% cal:
+%%   cal_invt (-)
+
+%% ASM:
+%%   abstract_all (cal_invt, receiver_mode_invt)
+
+%% faults:
+%%   manifest_relay (-)
+%%   symmetric_relay (-)
+%%   fault_propagation (cal_invt)
+%%   source_to_latch (fault_propagation)
+%%   manifest_source (fault_propagation)
+
+%% receiver:
+%%   missing_buffer_size (cal_invt)
+%%   receiver_mode_invt (missing_buffer_size)
+
+%% voting:
+%%   majority_vote_invt (receiver_mode_invt)
+%%   exists_majority (receiver_mode_invt majority_vote_invt)
+
+%% protocol: (everything :))
+%%   validity
+%%   agreement
 
 \begin{figure}
   \centering
-  \includegraphics[width=\textwidth]{figs/proof-structure}
-  \caption{Proof structure.}
+%%   \begin{tabular}{r|c|c|c|c|c|}
+%%              & (a) Calendar & (b) ASM & (c) Protocol & (d) Voting & (e) Fault model \\
+%%     \hline \hline
+%%       Lemmas & 2            & 1       & 3            & 4          & 5 \\
+%% Dependencies &              & (a), (d),         &              &            &   \\
+%%   \end{tabular}
+  %% \includegraphics[width=\textwidth]{figs/proof-structure}
+  \caption{Invariant classification.}
   \label{fig:proof}
 \end{figure}
 
+The lemmas fall into five categories: calendar automata lemmas, abstract state machine lemmas, protocol behavior lemmas, majority vote lemmas, and fault model lemmas.
+
+
+\lee{make clear we're agnostic about human-provided invariants. We conjecture some can be auto-generated. Some might be inferred by IC3.}
+
+
 The proof structure is shown in Figure~\ref{fig:proof}. The two graphs show the structure to prove validity and agreement, respectively. The nodes group related lemmas, and a directed edge from node $a$ to $b$ means lemmas of $b$ depend on $a$. For readability, we have replicated lemmas shared in the proofs of validity and agreement. Additionally, we have elided the dependencies between the lemmas within each node. The proofs are all $k=1$ inductive.
 
-The lemmas are classified into five groups: calendar automata lemmas, abstract state machine lemmas, protocol behavior lemmas, majority vote lemmas, and fault model lemmas.
 
 The calendar automata lemmas do not concern the system. The \emph{cal\_invt} lemma is a conjunction of basic properties about the calendar automata, essentially characterizing the axiomatization described in Section~\ref{sec:calendar}. Additionally, the \emph{missing\_buffer\_size} lemma relates the calendar to a node's message buffer: the messages received added to the empty messages equals the total number of possible messages to receive.
 
