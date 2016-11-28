@@ -1034,30 +1034,6 @@ manifest_source: LEMMA system_obs |-
     AND
     (EXISTS (i: RELAYS): latches[i] = recv_bad_msg => is_faulty?(f[source_id])));
 
-% A symmetric fault in the source has "no useful interpretation", i.e.
-% w.l.o.g. is equivalent to a non-faulty source with a different message.
-%
-% So the LEMMA here is provable, but not useful.
-%
-% % If a is not missing, then a, else b
-% iata(a: MESSAGE, b:MESSAGE): MESSAGE =
-%   IF a /= missing THEN a ELSE b ENDIF;
-%
-% symmetric_source: LEMMA system_obs |-
-%   G(source_done AND symmetric_fault_constraint(f) AND f[source_id] = symmetric =>
-%           % each relay either has a message waiting, or has set its latch
-%           (FORALL (i: RELAYS):
-%              iata(cal.msg[chan(source_id, i)], latches[i]) /= missing)
-%       AND (FORALL (i: RELAYS):
-%              relays_done[i] => ;;
-%           % the non-missing value in cal or latch agrees for all relays
-%       AND (FORALL (i,j: RELAYS):
-%              iata(cal.msg[chan(source_id, i)], latches[i]) =
-%              iata(cal.msg[chan(source_id, j)], latches[j]))
-%    );
-
-
-
 % missing_buffer_size - for each receiver: # messages currently received +
 % # of slots with 'missing' = total number of relays.
 %
