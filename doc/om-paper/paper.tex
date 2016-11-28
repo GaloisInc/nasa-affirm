@@ -46,7 +46,22 @@
 
 
 \begin{abstract}
-With proof techniques like IC3 and $k$-induction with user-supplied invariants, model-checking scales further than ever before. Still, fault-tolerant distributed systems are particularly challenging to model-check given their large state space and non-determinism. The typical approach to controlling complexity is to construct ad-hoc abstractions of faults, message-passing, and behavior to simplify their behavior. However, these abstractions come at the price of divorcing the model from its implementation and making refactoring difficult. In this work, we present a systematic model for fault-tolerant distributed system verification that combines calendar automata, synchronous observers, and abstract state machines specialized for model-checking. We demonstrate the efficacy of the framework by presenting the first model-checked \emph{implementation} of the Hybrid Oral Messages algorithm, using a fast majority vote, then demonstrate how modifications along axes such as the fault model, topology, node behavior, and require only local modifications to the model and proofs.
+With proof techniques like IC3 and $k$-induction with user-supplied
+invariants, model-checking scales further than ever before.  Still,
+fault-tolerant distributed systems are particularly challenging to
+model-check given their large state space and non-determinism. The
+typical approach to controlling complexity is to construct ad-hoc
+abstractions of faults, message-passing, and behaviors.  However,
+these abstractions come at the price of divorcing the model from its
+implementation and make refactoring difficult. In this work, we
+present a systematic model for fault-tolerant distributed system
+verification that combines calendar automata, synchronous observers,
+and abstract state machines specialized for model-checking. We
+demonstrate the efficacy of the framework by presenting the first
+model-checked \emph{implementation} of the Hybrid Oral Messages
+algorithm, using a fast majority vote, then demonstrate how
+modifications along axes such as the fault model, topology, and node
+behavior require only local modifications to the model and proofs.
 \end{abstract}
 
 \section{Introduction}
