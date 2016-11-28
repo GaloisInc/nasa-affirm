@@ -832,46 +832,15 @@ system_obs : MODULE = system || observer || abstractor || abstract_monitor;
 
 %%%  Abstraction Lemmas
 
-% sal-inf-bmc  -d 1 om1_cal abstract_init
-abstract_init: LEMMA system_obs |- A1;
-
-% sal-inf-bmc -i  -d 1 om1_cal abstract_a1
-abstract_a1:   LEMMA system_obs |- G(state = a1 => A1);
-
-% sal-inf-bmc -i  -d 1 om1_cal abstract_a2
-abstract_a2:   LEMMA system_obs |- G(state = a2 => A2);
-
-% sal-inf-bmc -i  -d 1 om1_cal abstract_a3
-abstract_a3:   LEMMA system_obs |- G(state = a3 => A3);
-
-% sal-inf-bmc -i  -d 1 om1_cal abstract_a3b
-abstract_a3b:   LEMMA system_obs |- G(state = a3b => A3b);
-
-% sal-inf-bmc -i  -d 1 om1_cal abstract_a4
-abstract_a4:   LEMMA system_obs |- G(state = a4 => A4);
-
-% sal-inf-bmc -i  -d 1 om1_cal abstract_a5
-abstract_a5:   LEMMA system_obs |- G(state = a5 => A5);
-
-% abstract_invt - proves that the abstraction is sound
-%
-% Proved: (using many lemmas)
-% sal-inf-bmc -i -d 1 \
-%     -l abstract_a1 -l abstract_a2 -l abstract_a3 \
-%     -l abstract_a3b -l abstract_a4 -l abstract_a5 \
-%     -l cal_invt -l lemma_relays -l receiver_mode_invt \
-%     -l fault_propagation \
-%     om1_cal abstract_invt
-%
-abstract_invt: LEMMA system_obs |- G(state /= bad);
+% % sal-inf-bmc  -d 1 om1_cal abstract_init
+% abstract_init: LEMMA system_obs |- A1;
 
 % abstract_all - conjunction of all the state predicates and the
 % 'abstract_invt'
 %
 % Proved:
 % sal-inf-bmc -i -d 1 \
-%     -l abstract_a1 -l abstract_a2 -l abstract_a3 -l abstract_a3b \
-%     -l abstract_a4 -l abstract_a5 -l cal_invt -l receiver_mode_invt \
+%     -l cal_invt -l receiver_mode_invt \
 %     om1_cal abstract_all
 %
 abstract_all: LEMMA system_obs |-
