@@ -173,6 +173,7 @@ function cmd {
     for ((i=0; i < ${#lines[@]}; i++))
     do
         # insert SAL options
+        # XXX make 'sal-inf-bmc' generic here
         local salcmd=${lines[$i]/sal-inf-bmc/sal-inf-bmc $SALOPT}
         # replace SAL file name with the base name followed by any parameters
         if [ -n "${SAL_PARAMS}" ]; then
@@ -191,11 +192,13 @@ function cmd {
         local tmp=$(mktemp runproof.XXXXXXXX -ut)
         exec $salcmd_params 2>&1 |\
             tee $tmp |\
-            awk '/(failed|Error|induction rule failed)/ \
+            # XXX DRY with the regex, but needs to be quoted two different
+            # ways
+            awk '/(invalid|failed|Error|induction rule failed)/ \
                      {print "'$CS'" $0 "'$CE'"} \
                  /(proved|no counterexample)/ \
                      {print "'$CG'" $0 "'$CE'"}'
-        egrep -E -q '(failed|Error|induction rule failed)' $tmp
+        egrep -E -i -q '(invalid|failed|error|induction rule failed)' $tmp
         if [ $? -eq 0 ]; then
             fail=$(($fail+1))
         else
@@ -211,6 +214,12 @@ function cmd {
 
     local t=$(($end-$start))
     printf "total time ellapsed: $t seconds"
+
+    if [ $fail -eq 0 ]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Write out to standard out and err to standard error.
