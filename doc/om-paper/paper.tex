@@ -88,7 +88,7 @@ To demonstrate the model in Section~\ref{sec:byz}, we present a formally-verifie
 
 %% Two examples of model-specific abstractions include the following: (1) Suppose we model a system in which a process that broadcasts the values $\{0, 1\}$ in the nominal case, but when the process suffers a fault, it broadcasts no value. To model the system, it is typical to define an enumerated type of broadcast values as $$\{0, 1, NONE\}$$ However, the enumeration conflates the environment (i.e., faults) and system (i.e., the non-faulty broadcast values). (2) Another example is to model message passing as shared state between processes to reduce the number of state variables in the model, since the message passing mechanism is elided. While these optimizations might be safe under particular assumptions, they require careful meta-level reasoning and justification and divorce the model from any realization of it.
 
-\lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking: will need user-provided lemmas. compositional approach to providing lemmas. note verification interesting in its own right }
+\lee{finish intro...  One more contribution is that we abstract faults using partially interpreted functions in model-checking, which is new? Note focus is on infinite-state model-checking: will need user-provided lemmas. compositional approach to providing lemmas. note verification interesting in its own right. verification goes beyond what has been done in thm provers }
 
  %% Timed automata are an alternative to the \emph{timed automata} formalism~\cite{}, as implemented in model-checkers like UPPAAL~\cite{} and Kronos~\cite{}.
 
@@ -319,44 +319,6 @@ The algorithm is recursively defined:
 \noindent
 In particular, $OMH(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
 
-%% parameterized by the
-%% number of rounds of message relay. Here, we focus on Oral Messages with one
-%% round of communication, $\OM{1}$, that tolerates a single Byzantine fault \todo{true?}, so
-%% long as there are a sufficient number of nodes nodes.
-
-%% Each of the $n$ nodes in the system represents a (Byzantine) General. In this
-%% formulation, the center node is the commanding general, while the $n-1$ outer
-%% generals are the lieutenants. The algorithm starts with the commanding general
-%% sending each lieutenant the same message $v$. Upon receipt of the commander's
-%% message, each lieutenant in turn sends the message received to each of the other
-%% lieutenants.  Once a lieutenant has received all $n-1$ expected messages, a
-%% majority vote is taken among the $n$ messages and the lieutenant declares its
-%% output (course of action) to be whichever message is in the majority.
-
-%% \begin{figure}[ht]
-%% \centering
-%% \begin{tikzpicture}[
-%% ell/.style={x radius=1, y radius=0.5, draw, shape=circle},
-%% arr/.style={semithick}]
-%% \node[ell] (c)  at (0,0)   {Commander};
-%% \node[ell] (l1) at (0:4)   {Lieutenant 1};
-%% \node[ell] (l2) at (120:4) {Lieutenant 2};
-%% \node[ell] (l3) [fill=gray!30] at (240:4) {Lieutenant 3};
-%% %
-%% \draw[->, arr] (c) -- node[auto] {$v$} (l1);
-%% \draw[->, arr] (c) -- node[auto] {$v$} (l2);
-%% \draw[->, arr] (c) -- node[auto] {$v$} (l3);
-%% \draw[<->, arr] (l1) -- node[auto,swap,near start] {$v$}
-%%                         node[auto,swap,near end] {$v$} (l2);
-%% \draw[<->, arr] (l1) -- node[auto,near start,color=red] {$x$}
-%%                         node[auto,near end] {$v$} (l3);
-%% \draw[<->, arr] (l2) -- node[auto,swap,near start,color=red] {$x$}
-%%                         node[auto,swap,near end] {$v$} (l3);
-%% \end{tikzpicture}
-%% \caption{\OM{1} Four generals, one traitor}
-%% \label{fig:om1}
-%% \end{figure}
-
 OMH is designed to preserve \emph{validity} and \emph{agreement}
 properties. Validity states that if the general is non-faulty, then every lieutenant outputs the value sent by the general. More formally, let the general broadcast $v \neq ERR$, and let $l_i$ denote the output for lieutenant $i$:
 %
@@ -381,7 +343,7 @@ The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, whi
 \lee{Maybe talk about MJRTY here. Maybe also talk about relaxing in synchronous communication in model.}
 \lee{talk about synchrony being loosened, so the general/receivers don't all send/receive at the same time. Talk about lieutenants being ``unrolled'' into relays and receivers, following Rushby.}
 
-\subsection{Invariants}
+\subsection{Invariants}\label{sec:invariants}
 
 %% Lemmas and dependencies:
 %% cal:
@@ -434,31 +396,16 @@ The verification is carried out in the Symbolic Analysis Laboratory~\cite{}, whi
   \label{fig:proof}
 \end{figure}
 
-To make the proof scalable, we specify inductive invariants to be used by SAL's $k$-induction engine. The invariants are modular. There are 11 invariants, that fall into five categories:
+To make the proof scalable, we specify inductive invariants to be used by SAL's $k$-induction engine. The invariants are modular. There are 11 invariants, falling into five categories:
 \begin{enumerate}
   \item \emph{Calendar automata}: Lemmas relating to the calendar automata model. These include lemmas such as time being monotonic, channels missing messages if there is no calendar event, and only nodes associated with a calendar event may execute their local state machines.
   \item \emph{Abstract state machine (ASM)}: Lemmas relating the ASM synchronous observer states to the implementation states.
   \item \emph{Lieutenant local state-machine (SM) behavior}: Lemmas describing the modes of behavior of the lieutenants. The major modes of the state machine are receiving messages, then once it has filled its buffer, it votes, and after voting returns the result. One additional lemma notes that the messages currently received plus missing messages equals the total number of expected messages.
-  \item \emph{Faults}: Lemmas characterizing the effect of a fault in a single broadcast. For example, a lieutenant reports that it ``received an error'' when it receives a benignly-faulty message.
+  \item \emph{Faults}: Lemmas characterizing the effect of a fault in a single broadcast. Examples include lemmas stating that if a node receives a faulty message, some ``upstream'' node in the communication path was faulty. Another example is that the faults of messages latched by a node in its buffer match the faults ascribed to the sender in the calendar event.
   \item \emph{Voting}: Lemmas proving that the Fast Majority Vote algorithm implements a majority vote, if one exists. These lemmas are nearly verbatim transcriptions from the journal proofs~\cite{mjrty}.
 \end{enumerate}
 \noindent
-The proof structure is shown in Figure~\ref{fig:proof}. The number of lemmas per category are shown in parentheses. Arrows denote dependencies. For example, the ASM lemmas depend on both the calendar automata and lieutenant state-machine lemmas.
-
-
-\lee{make clear we're agnostic about human-provided invariants. We conjecture some can be auto-generated. Some might be inferred by IC3.}
-
-
- The two graphs show the structure to prove validity and agreement, respectively. The nodes group related lemmas, and a directed edge from node $a$ to $b$ means lemmas of $b$ depend on $a$. For readability, we have replicated lemmas shared in the proofs of validity and agreement. Additionally, we have elided the dependencies between the lemmas within each node. The proofs are all $k=1$ inductive.
-
-
-The calendar automata lemmas do not concern the system. The \emph{cal\_invt} lemma is a conjunction of basic properties about the calendar automata, essentially characterizing the axiomatization described in Section~\ref{sec:calendar}. Additionally, the \emph{missing\_buffer\_size} lemma relates the calendar to a node's message buffer: the messages received added to the empty messages equals the total number of possible messages to receive.
-
-The \emph{abstract\_all} lemmas characterizes the transition between states of the abstract state machine. Technically, \emph{abstract\_all} also depends on ``boilerplate'' lemmas relating each state of the abstract state machine to a state variable representing it, which are elided for space.
-
-The system itself includes both the lemmas characterizing the global protocol behavior as well as majority vote\lee{have we talked about the voting algorithm earlier?}. The global behavior concerns the entire distributed system, whereas the lemmas regarding the majority vote algorithm only concern the behavior of a single node. The proofs mechanize closely the proofs found in Boyer and Moore's original treatment~\cite{}.
-
-Finally, the fault model lemmas relate the fault model to the system. The \emph{fault\_propagation} lemma connects the presence of faulty messages in the calendar with the fault status of nodes that receive those messages in subsequent rounds. The \emph{symmetric\_relay} and \emph{manifest\_relay} lemmas characterize the effect of symmetric and manifest faults, respectively, on the kinds of messages a receiver obtains from a faulty node. All the fault model lemmas mentioned so far are necessary for the agreement proof, but for validity, we need only \emph{candidate\_good}, proving that if the maximum fault assumption holds and the sender is nonfaulty, then no modified messages are received.
+The proof structure is shown in Figure~\ref{fig:proof}. The number of lemmas per category are shown in parentheses. Arrows denote dependencies. For example, the ASM lemmas depend on both the calendar automata and lieutenant state-machine lemmas. As can be seen, the proof structure is quite modular. The calendar lemmas are general and independent of any particular protocol or fault model. Similarly, lemmas about the internal behavior of a lieutenant is independent of the global protocol behavior. It is also independent of the effect of faults on the system---the only ``knowledge'' of faults that lieutenant has is whether a fault is benign or not. Lemmas about the behavior of faults in the system are also independent of the particular protocol being modeled. Likewise, lemmas about the particular voting algorithm used depend only on the lieutenant's internal behavior. Only the ASM depends on both calendar-specific and local state-machine results, since it is an abstraction of the entire system implementation. Recall, however, that the ASM is a convenience for debugging and can be elided.
 
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
@@ -500,10 +447,35 @@ Here we present two classes of experimental results. First, we demonstrate the s
 \end{figure}
 
 \lee{let's also check out scalability when we ``turn off'' faults. Also, how hard is it to turn them off or change the fault model? E.g., how many lines of spec need to be changed? Compare to rushby's?}
+\lee{what are the machine specs for running the benchmark?}
 
+\subsection{Modular Verification}\label{sec:modular}
+To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and discover the effort required to implement the modifications and repair the proofs.
 
-\subsection{Modular Verification}
+%% \begin{figure}
+%%   \centering
+%%   \begin{tabular}{r|l|l|l|}
+%%                    & Modules modified    & Lemmas modified & Lemma classes modified\\
+%%   \hline \hline
+%%   Faults           & 
+%%   \hline
+%%   Time-triggered   &
+%%   \hline
+%%   \end{tabular}
+%%   \caption{Refactoring effort for protocol modifications.}
+%%   \label{fig:effort}
+%% \end{figure}
 
+\paragraph{Modified fault model.}
+
+\paragraph{Time-triggered messaging.}
+
+\subsection{Proof Effort Remarks}
+The lemmas described in Section~\ref{sec:invariants} are constructed by-hand and represent multiple days of effort, but that effort includes both model and protocol construction and generalization as well as verification. The counterexamples returned by SAL are very useful for strengthening invariants, but tedious to analyze---a model with five relays and two receivers contains 90 state variables, and there are known counterexamples to models that size~\cite{csl-93-2}. Once we developed the ASM synchronously-composed observer, the verification effort was sped up considerably.
+
+As shown in Section~\ref{sec:modular}, modifications to the implementation are modular. In particular, any protocol specified in the model can reuse the lemmas associated with the calendar automata and fault-model (insofar as they use the same fault model).
+
+Moreover, we are agnostic about how lemmas are discovered. As techniques like IC3 scale, they may be discovered automatically. $k$-induction in infinite-state model-checking blurs the lines between interactive and automated theorem proving. IC3 can even be strengthened using $k$-induciton~\ref{pdr-kind}. Tools like Ivy can present graphical counterexamples to help interactively develop invariants~\cite{ivy}.
 
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
@@ -512,19 +484,16 @@ The Oral Messages algorithm and its variants have a long history of formal verif
 
 Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. That said, their model of OM(1) (not OMH(1)), timeouts after 10~hours, and we assume a voting algorithm is not explicitly specified. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of OM(1) as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
 
-\url{https://people.eecs.berkeley.edu/~apanda/assets/papers/pldi16.pdf}
-
 \lee{mention that ASMs similar to disjunction invariants}
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
 
+\lee{link to all results in github}
 \lee{talk about compositional verification of properties, even though SAL doesn't directly support it}
 \lee{talk about k-induction vs. PDR}
 \lee{talk about lack of axiomatization in model-checking (multiple rushby bugs), but  tradeoff of deadlock. see proglema paper}
-
 \lee{talk about atom-sally}
-
 \lee{note some details still elided for implementation ---e.g., CRCs, etc.}
 
 \section*{Acknowledgments}
