@@ -727,6 +727,7 @@ BEGIN
              );
 
     % all relays are done; at least one receiver is done and one is not done
+    % Note: this state isn't entered when there is only one receiver.
     A4 =     source_done
          AND (FORALL (i: RELAYS): relays_done[i]
                 AND null?(cal, chan(source_id, i))
@@ -795,6 +796,7 @@ BEGIN
       state = a3b -->
         state' = IF      A3b' THEN a3b
                    ELSIF A4'  THEN a4
+                   ELSIF A5'  THEN a5
                    ELSE            bad
                    ENDIF
     []
