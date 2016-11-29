@@ -38,10 +38,10 @@ diag_params=("1,1" "2,2" "3,3" "4,4" "5,5" "6,6" "7,7" "8,8" "9,9" "10,10")
 ###  EDIT ME  ##############################################
 
 # Specify which parameter set to use
-param_set="${mixed_params[@]}"
+param_set="${small_params[@]}"
 
 # Specify how many concurrent jobs to run
-CONCURRENT_LIMIT=${CONCURRENT_LIMIT:-8}
+CONCURRENT_LIMIT=${CONCURRENT_LIMIT:-1}
 export CONCURRENT_LIMIT  # exported for concurrent.lib.sh
 
 # specify timeout
@@ -57,12 +57,17 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.lib.sh"
 SAL_SMC=$(resolve_prog sal-smc)          # SAL symbolic model checker
 SAL_BMC=$(resolve_prog sal-inf-bmc)  # SAL inf-state bounded model checker
 
+CS="\033[0;31m"  # red
+CG="\033[0;32m"  # green
+CE="\033[0m"     # no color
+
 # run SAL symbolic model checker with specific options, redirect output to a
 # temporary file, match the "total execution time" line and extract run time
 sal_smc_cmd() {
     local model=$1
     local par=$2
     local tmp=$(mktemp sal_cmd.XXXXXX -ut)
+    local output=""
 
     timeout $TIME_LIMIT \
         ${SAL_SMC} -v 1 \
@@ -72,42 +77,51 @@ sal_smc_cmd() {
         --enable-dynamic-reorder \
         "${model}{$par}" vaa \
         2>&1 | tee "$tmp"
+    local code=${PIPESTATUS[0]}
 
     # output run time next to job status
-    if [ $? -eq 124 ]; then
+    if [ $code -eq 124 ]; then
         # timeout
         echo "RESULT $par, timeout"
         echo "timeout" >&3
+    elif [ $code -ne 0 ]; then
+        output="fail: exit status $code"
+        echo $output
+        echo $output >&3
     else
         # normal return
         cat "$tmp" | awk "/total exec/ {print \"RESULT $par,\", \$4}"
-        cat "$tmp" | awk "/total exec/ {print \"proved\", \$4}" >&3
+        cat "$tmp" | awk "/total exec/ {print \"proved in \", \$4, \"s\"}" >&3
     fi
     rm "$tmp"
+    return $code
 }
 
 sal_bmc_cmd() {
     local model=$1
     local par=$2
     local tmp=$(mktemp sal_cmd.XXXXXX -ut)
+    local output=""
 
     timeout $TIME_LIMIT \
         ./runproof.sh $model -par "{$par}" \
         2>&1 | tee "$tmp"
-    local code=$?
+    local code=${PIPESTATUS[0]}  # capture exit status of timeout + runproof
 
     # output run time next to job status
     if [ $code -eq 124 ]; then
         echo "RESULT $par, timeout"
         echo "timeout" >&3
     elif [ $code -ne 0 ]; then
-        printf "exit %d" $code
-        printf "exit %d" $code >&3
+        output="fail: exit status $code"
+        echo $output
+        echo $output >&3
     else
         cat "$tmp" | awk "/total time ellapsed/ {print \"RESULT $par,\", \$4}"
-        cat "$tmp" | awk "/total time ellapsed/ {print \"proved\", \$4}" >&3
+        cat "$tmp" | awk "/total time ellapsed/ {print \"proved in \", \$4, \"s\"}" >&3
     fi
     rm "$tmp"
+    return $code
 }
 
 main_rushby() {
@@ -137,7 +151,8 @@ main_affirm() {
 
 
 # param_set is specified above
-case $1 in
+arg1="${1:-}"
+case $arg1 in
     "rushby")
         main_rushby "${param_set[@]}"
         ;;
@@ -145,7 +160,7 @@ case $1 in
         main_affirm "${param_set[@]}"
         ;;
     *)
-        echo "unknown target $1"
+        echo "unknown target '$arg1', choose either 'rushby' or 'affirm'"
         exit 1
         ;;
 esac
