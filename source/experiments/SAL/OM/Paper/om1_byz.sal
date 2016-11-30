@@ -57,6 +57,7 @@ TIME: TYPE = { t: REAL | t >= -2 };
 MESSAGE: TYPE = { m: INTEGER | m >= -1 };
 REAL_MESSAGE: TYPE = { m: MESSAGE | m >= 0 };
 uninterp_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
+uninterp_omissive_msg(i: IDENTITY, j: IDENTITY): REAL_MESSAGE;
 
 % UNCOMMENT the following lines to get a FINITE model.
 %
@@ -150,7 +151,7 @@ msg_delay:    TIME = 1;
 %=== Faults ------------------------------------------------------===
 
 % For details on the hybrid fault model, see [2].
-FAULT_TYPE: TYPE = { nonfaulty, byzantine, manifest, symmetric };
+FAULT_TYPE: TYPE = { nonfaulty, byzantine, omissive_asym, manifest, symmetric };
 FAULTS: TYPE = ARRAY IDENTITY OF FAULT_TYPE;
 is_faulty?(fi: FAULT_TYPE): BOOLEAN = fi /= nonfaulty;
 
@@ -251,6 +252,8 @@ msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
     % Note: the case of a source with symmetric fault is equivalent to
     % the non-faulty case.
     uninterp_msg(i, j)
+  ELSIF f[i] = omissive_asym THEN
+    uninterp_omissive_msg(i,j)
   ELSIF f[i] = manifest THEN
     % manifest case: return a manifestly faulty value
     bad_msg
@@ -882,6 +885,16 @@ symmetric_fault_constraint(f: FAULTS): BOOLEAN =
     f[i] = symmetric => (FORALL (r0, r1: RECEIVERS):
       uninterp_msg(i, r0) = uninterp_msg(i, r1)));
 
+omissive_asymmetric_fault_constraint(f: FAULTS): BOOLEAN =
+  (f[source_id] = omissive_asym => FORALL (r0: RELAYS):
+        uninterp_omissive_msg(source_id, r0) = good_msg
+     OR uninterp_omissive_msg(source_id, r0) = bad_msg
+  AND
+  (FORALL (i: RELAYS):
+    f[i] = omissive_asym => (FORALL (r0: RECEIVERS):
+        uninterp_omissive_msg(source_id, r0) = good_msg
+     OR uninterp_omissive_msg(source_id, r0) = bad_msg)));
+
 % We only consider faults of the source and relays. A faulty receiver in this
 % model is not observable since the receivers don't send any messages.
 receiver_fault_constraint(f: FAULTS): BOOLEAN =
@@ -895,7 +908,8 @@ receiver_fault_constraint(f: FAULTS): BOOLEAN =
 %
 bfa(f: FAULTS): BOOLEAN =
       receiver_fault_constraint(f)
-  AND symmetric_fault_constraint(f);
+  AND symmetric_fault_constraint(f)
+  AND omissive_asymmetric_fault_constraint(f);
 
 % Maximum fault assumption
 %
@@ -905,9 +919,11 @@ bfa(f: FAULTS): BOOLEAN =
 % The fault model is described more fully in [OMH] Theorem 1 (pg. 7).
 mfa(f: FAULTS): BOOLEAN =
       bfa(f)
-  AND fault_count(f, byzantine) <= 1
+  AND fault_count(f, byzantine) = 0
+  AND fault_count(f, omissive_asym) <= 1
   AND fault_count(f, symmetric) = 0
   AND fault_count(f, manifest) = 0;
+%  AND fault_count(f, manifest) < num_relays;
 
 % To test the sharpness of 'mfa', allow at most two faulty nodes.
 % Lemmas which don't hold under this mfa include:
@@ -1000,7 +1016,9 @@ source_to_latch: LEMMA system_obs |-
   G(FORALL (i: RELAYS): latches[i] = missing OR
       (    (f[source_id] = nonfaulty => latches[i] = good_msg)
        AND (f[source_id] = byzantine OR f[source_id] = symmetric =>
-              latches[i] = wrap(uninterp_msg(source_id, i)))));
+              latches[i] = wrap(uninterp_msg(source_id, i)))
+       AND (f[source_id] = omissive_asym =>
+              latches[i] = wrap(uninterp_omissive_msg(source_id, i)))));
 
 % manifest_relay - when a relay is manifestly faulty, receivers will only get
 % 'bad_msg' from it.
@@ -1020,9 +1038,12 @@ manifest_relay: LEMMA system_obs |-
 % sal-inf-bmc -i -d 1 om1_byz uninterp_msg_relay
 uninterp_msg_relay: LEMMA system_obs |-
   G(FORALL (i: RELAYS, j: RECEIVERS):
-      (f[i] = byzantine OR f[i] = symmetric) =>
-         (   buffers[j][i] = missing
-          OR buffers[j][i] = uninterp_msg(i, j))
+          (f[i] = byzantine OR f[i] = symmetric) =>
+             (   buffers[j][i] = missing
+              OR buffers[j][i] = uninterp_msg(i, j))
+      AND (f[i] = omissive_asym =>
+             (   buffers[j][i] = missing
+              OR buffers[j][i] = uninterp_omissive_msg(i, j)))
    );
 
 % manifest_source - when the source is manifestly faulty, relays will only get
