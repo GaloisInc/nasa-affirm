@@ -446,8 +446,16 @@ Here we present two classes of experimental results. First, we demonstrate the s
   \caption{Benchmark of full proof computation time for OMH(1) implementation. Times are in seconds with a timeout (TO) limit of one hour. Dashes ('-') denote no benchmark was run.}
 \end{figure}
 
-\lee{let's also check out scalability when we ``turn off'' faults. Also, how hard is it to turn them off or change the fault model? E.g., how many lines of spec need to be changed? Compare to rushby's?}
-\lee{what are the machine specs for running the benchmark?}
+The benchmarks were performed on a server with Intel Xeon E312xx (Sandy
+Bridge) CPUs (mid 2011).
+
+For comparison, when the fault model is ``turned off'' by defining the fault
+type to contain a single 'nonfaulty' value and removing fault specific lemmas,
+model-checking scales further. For example when there are 3 relays and 3
+receivers the time is 25s (compared to 40s above), and when where are 5 relays
+and 5 receivers the time is 315s (compared to timeout above). See Figure
+\ref{fig:effort} for more comparisons.
+
 
 \subsection{Modular Verification}\label{sec:modular}
 To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and discover the effort required to implement the modifications and repair the proofs.
