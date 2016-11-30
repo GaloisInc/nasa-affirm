@@ -458,23 +458,25 @@ and 5 receivers the time is 315s (compared to timeout above). See Figure
 
 
 \subsection{Modular Verification}\label{sec:modular}
-To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and discover the effort required to implement the modifications and repair the proofs.
 
-%% \begin{figure}
-%%   \centering
-%%   \begin{tabular}{r|l|l|l|}
-%%                    & Modules modified    & Lemmas modified & Lemma classes modified\\
-%%   \hline \hline
-%%   Faults           & 
-%%   \hline
-%%   Time-triggered   &
-%%   \hline
-%%   \end{tabular}
-%%   \caption{Refactoring effort for protocol modifications.}
-%%   \label{fig:effort}
-%% \end{figure}
+\begin{figure}
+  \centering
+  \begin{tabular}{p{3cm}|p{3cm}|l|l|}
+                                  & Modules modified    & Lemmas modified & Lemma classes modified\\
+  \hline \hline
+  Byzantine-only fault model      & 0                   & 0               & 0 \\
+  \hline
+  Time-triggered message-passing  & \texttt{clock}, \texttt{relay}
+                                  , \texttt{receiver}   & 0               & 0 \\
+  \hline
+  \end{tabular}
+  \caption{Refactoring effort for protocol modifications.}
+  \label{fig:effort}
+\end{figure}
+To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and discover the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{sec:effort} and sketched below.
 
-\paragraph{Modified fault model.}
+\paragraph{Fault model.}
+Modifying the fault model is easy. In involves modifying the definition of a single function, \texttt{mfa}, that takes as an argument the static assignment of node identifiers to faults. Moreover
 
 \paragraph{Time-triggered messaging.}
 
