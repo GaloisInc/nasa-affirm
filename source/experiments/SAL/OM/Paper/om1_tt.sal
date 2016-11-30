@@ -791,6 +791,7 @@ BEGIN
       state = a3b -->
         state' = IF      A3b' THEN a3b
                    ELSIF A4'  THEN a4
+                   ELSIF A5'  THEN a5
                    ELSE            bad
                    ENDIF
     []
