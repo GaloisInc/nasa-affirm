@@ -39,7 +39,7 @@
 % num_relays = # of relays
 % num_recvs  = # of receivers
 %
-om1_byz {; num_relays: nznat, num_recvs: nznat}: CONTEXT =
+om1_omis_asym {; num_relays: nznat, num_recvs: nznat}: CONTEXT =
 BEGIN
 
 %=== Basic Types -------------------------------------------------===
@@ -151,7 +151,7 @@ msg_delay:    TIME = 1;
 %=== Faults ------------------------------------------------------===
 
 % For details on the hybrid fault model, see [2].
-FAULT_TYPE: TYPE = { nonfaulty, byzantine, omissive_asym, manifest, symmetric };
+FAULT_TYPE: TYPE = { nonfaulty, omis_asymantine, omissive_asym, manifest, symmetric };
 FAULTS: TYPE = ARRAY IDENTITY OF FAULT_TYPE;
 is_faulty?(fi: FAULT_TYPE): BOOLEAN = fi /= nonfaulty;
 
@@ -247,7 +247,7 @@ empty_calendar: CALENDAR =
 
 
 msg(s: TIME, cal: CALENDAR, f: FAULTS, i:IDENTITY, j:IDENTITY): MESSAGE =
-  IF f[i] = byzantine OR f[i] = symmetric THEN
+  IF f[i] = omis_asymantine OR f[i] = symmetric THEN
     % The symmetric case is further constrained below, see 'mfa'.
     % Note: the case of a source with symmetric fault is equivalent to
     % the non-faulty case.
@@ -837,7 +837,7 @@ system_obs : MODULE = system || observer || abstractor || abstract_monitor;
 
 %%%  Abstraction Lemmas
 
-% % sal-inf-bmc  -d 1 om1_byz abstract_init
+% % sal-inf-bmc  -d 1 om1_omis_asym abstract_init
 % abstract_init: LEMMA system_obs |- A1;
 
 % abstract_all - conjunction of all the state predicates
@@ -845,7 +845,7 @@ system_obs : MODULE = system || observer || abstractor || abstract_monitor;
 % Proved:
 % sal-inf-bmc -i -d 1 \
 %     -l cal_invt -l receiver_mode_invt \
-%     om1_byz abstract_all
+%     om1_omis_asym abstract_all
 %
 abstract_all: LEMMA system_obs |-
   G(    (state = a1 => A1)
@@ -919,10 +919,10 @@ bfa(f: FAULTS): BOOLEAN =
 % The fault model is described more fully in [OMH] Theorem 1 (pg. 7).
 mfa(f: FAULTS): BOOLEAN =
       bfa(f)
-  AND fault_count(f, byzantine) = 0
+  AND fault_count(f, omis_asymantine) = 0
   AND fault_count(f, omissive_asym) <= 1
   AND fault_count(f, symmetric) = 0
-  AND fault_count(f, manifest) = 0;
+  AND fault_count(f, manifest) <= 1;
 %  AND fault_count(f, manifest) < num_relays;
 
 % To test the sharpness of 'mfa', allow at most two faulty nodes.
@@ -974,7 +974,7 @@ unique_atomic(cal: CALENDAR): BOOLEAN =
 % cal_invt - basic invariants of time and the calendar
 %
 % Proved:
-% sal-inf-bmc -i  -d 1 om1_byz.sal cal_invt
+% sal-inf-bmc -i  -d 1 om1_omis_asym.sal cal_invt
 %
 cal_invt: LEMMA system_obs |-
   G(    monotonic_time(cal, t)
@@ -988,7 +988,7 @@ cal_invt: LEMMA system_obs |-
 % with the fault status of upstream nodes
 %
 % Proved:
-% sal-inf-bmc -i -d 1 -l cal_invt om1_byz.sal fault_propagation
+% sal-inf-bmc -i -d 1 -l cal_invt om1_omis_asym.sal fault_propagation
 %
 fault_propagation: LEMMA system_obs |-
   G(
@@ -1011,11 +1011,11 @@ fault_propagation: LEMMA system_obs |-
 % match our encoding of bad messages through 'uninterp_msg' depending on the
 % fault conditions.
 %
-% sal-inf-bmc -i -d 1 -l fault_propagation om1_byz.sal source_to_latch
+% sal-inf-bmc -i -d 1 -l fault_propagation om1_omis_asym.sal source_to_latch
 source_to_latch: LEMMA system_obs |-
   G(FORALL (i: RELAYS): latches[i] = missing OR
       (    (f[source_id] = nonfaulty => latches[i] = good_msg)
-       AND (f[source_id] = byzantine OR f[source_id] = symmetric =>
+       AND (f[source_id] = omis_asymantine OR f[source_id] = symmetric =>
               latches[i] = wrap(uninterp_msg(source_id, i)))
        AND (f[source_id] = omissive_asym =>
               latches[i] = wrap(uninterp_omissive_msg(source_id, i)))));
@@ -1024,21 +1024,21 @@ source_to_latch: LEMMA system_obs |-
 % 'bad_msg' from it.
 %
 % Proved
-% sal-inf-bmc -i -d 1 om1_byz manifest_relay
+% sal-inf-bmc -i -d 1 om1_omis_asym manifest_relay
 manifest_relay: LEMMA system_obs |-
   G(FORALL (i: RELAYS): f[i] = manifest =>
       FORALL (r: RECEIVERS):
         buffers[r][i] = missing OR buffers[r][i] = bad_msg);
 
-% uninterp_msg_relay - when a relay has a byzantine or symmetric fault, then
+% uninterp_msg_relay - when a relay has a omis_asymantine or symmetric fault, then
 % the message it sends to the receiver is uninterpreted (symmetric faults
 % are further constrained by the symmetric_fault_constraint).
 %
 % Proved
-% sal-inf-bmc -i -d 1 om1_byz uninterp_msg_relay
+% sal-inf-bmc -i -d 1 om1_omis_asym uninterp_msg_relay
 uninterp_msg_relay: LEMMA system_obs |-
   G(FORALL (i: RELAYS, j: RECEIVERS):
-          (f[i] = byzantine OR f[i] = symmetric) =>
+          (f[i] = omis_asymantine OR f[i] = symmetric) =>
              (   buffers[j][i] = missing
               OR buffers[j][i] = uninterp_msg(i, j))
       AND (f[i] = omissive_asym =>
@@ -1050,7 +1050,7 @@ uninterp_msg_relay: LEMMA system_obs |-
 % 'bad_msg' from it and they will only store 'recv_bad_msg'.
 %
 % Proved
-% sal-inf-bmc -i -d 1 -l fault_propagation om1_byz manifest_source
+% sal-inf-bmc -i -d 1 -l fault_propagation om1_omis_asym manifest_source
 manifest_source: LEMMA system_obs |-
   G((f[source_id] = manifest =>
       FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg)
@@ -1061,7 +1061,7 @@ manifest_source: LEMMA system_obs |-
 % # of slots with 'missing' = total number of relays.
 %
 % Proved:
-% sal-inf-bmc -i  -d 1 -l cal_invt om1_byz.sal missing_buffer_size
+% sal-inf-bmc -i  -d 1 -l cal_invt om1_omis_asym.sal missing_buffer_size
 %
 missing_buffer_size: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS, i:RELAYS):
@@ -1076,7 +1076,7 @@ missing_buffer_size: LEMMA system_obs |-
 % Proved:
 % sal-inf-bmc -i -d 1 \
 %     -l missing_buffer_size \
-%     om1_byz.sal receiver_mode_invt
+%     om1_omis_asym.sal receiver_mode_invt
 %
 receiver_mode_invt: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -1127,7 +1127,7 @@ receiver_mode_invt: LEMMA system_obs |-
 % Proved
 % sal-inf-bmc -i -d 1 \
 %     -l receiver_mode_invt -l majority_vote_invt \
-%     om1_byz.sal exists_majority
+%     om1_omis_asym.sal exists_majority
 %
 exists_majority: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -1151,7 +1151,7 @@ exists_majority: LEMMA system_obs |-
 % Proved through parameters {6,6}
 % sal-inf-bmc -i -d 1 \
 %     -l receiver_mode_invt \
-%     om1_byz.sal majority_vote_invt
+%     om1_omis_asym.sal majority_vote_invt
 %
 majority_vote_invt: LEMMA system_obs |-
   G(FORALL (r: RECEIVERS):
@@ -1185,7 +1185,7 @@ majority_vote_invt: LEMMA system_obs |-
 % sal-inf-bmc -i -d 1 \
 %     -l exists_majority -l receiver_mode_invt -l abstract_all \
 %     -l manifest_relay -l fault_propagation \
-%     om1_byz.sal validity
+%     om1_omis_asym.sal validity
 %
 validity: THEOREM system_obs |- G(vfa(f) => v_ok);
 
@@ -1205,7 +1205,7 @@ validity: THEOREM system_obs |- G(vfa(f) => v_ok);
 %     -l receiver_mode_invt -l majority_vote_invt -l exists_majority \
 %     -l manifest_relay -l uninterp_msg_relay -l manifest_source \
 %     -l source_to_latch \
-%     om1_byz agreement
+%     om1_omis_asym agreement
 %
 % Stats for num_relays=4, num_recvs=4:
 %
@@ -1230,14 +1230,14 @@ time_test: THEOREM system |- G(t < 2);  % for msg_delay = 1 this implies we
 
 % everyone finishes eventually:
 % current counter-example using FINITE model:
-% $ sal-inf-bmc -v 1 -d 30 'om1_byz{3,2}' all_done_test
+% $ sal-inf-bmc -v 1 -d 30 'om1_omis_asym{3,2}' all_done_test
 all_done_test: THEOREM system_obs |- G(not_done);
 
 %
 % Sanity checks.
 %
 % If the model is correct, these should all be non-THEOREMS.
-% Currently you can find a counter example to 'sanity1' in 'om1_byz{3,3}'
+% Currently you can find a counter example to 'sanity1' in 'om1_omis_asym{3,3}'
 % through bounded model checking to a depth of 25.
 %
 sanity0: THEOREM system |- G(EXISTS (r: RECEIVERS): NOT receivers_done[r]);
@@ -1251,9 +1251,9 @@ sanity4: THEOREM system |- G(EXISTS (r: RECEIVERS): FORALL (i: RELAYS): buffers[
 %
 % If you uncomment the type definitions for the FINITE model near the top
 % of the model, you can check for deadlock using the 'sal-deadlock-checker'
-% tool. Currently, setting 'upper_bound = 5' and checking 'om1_byz{2,2}' for
+% tool. Currently, setting 'upper_bound = 5' and checking 'om1_omis_asym{2,2}' for
 % deadlock returns in a reasonable amount of time:
 %
-% $ sal-deadlock-checker 'om1_byz{2,2}' system
+% $ sal-deadlock-checker 'om1_omis_asym{2,2}' system
 
 END
