@@ -500,16 +500,16 @@ Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthe
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
+This work fits within a larger project, in collaboration with Honeywell Labs, to build an \emph{architectural domain-specific language} (ADSL) for specifying and verifying distributed fault-tolerant systems. The goal of the language is to synthesize both software and/or hardware implementations as well as formal models for verification. Before building such an ADSL, we needed a scalable general formal model to which to compile, leading to the work presented. An ADSL will make refactoring even easier. We have developed a preliminary ADSL that generates C code as well as formal models SRI's Sally~\cite{}, a model-checking descendent to SAL that will be described in a subsequent paper.\footnote{\url{https://github.com/GaloisInc/atom-sally}}
 
 \lee{link to all results in github}
 \lee{talk about compositional verification of properties, even though SAL doesn't directly support it}
 \lee{talk about k-induction vs. PDR}
 \lee{talk about lack of axiomatization in model-checking (multiple rushby bugs), but  tradeoff of deadlock. see proglema paper}
-\lee{talk about atom-sally}
 \lee{note some details still elided for implementation ---e.g., CRCs, etc.}
 
 \section*{Acknowledgments}
-\lee{NASA contract, honeywell ppl, rushby's model?}
+This work is partially supported by NASA contract \#NNL14AA08C. We are indebted to our collaborators Brendan Hall and Srivatsan Varadarajan at Honeywell Labs, and to Wilfredo Torres-Pomales at NASA Langley for their discussions and insights.
 
 \bibliographystyle{IEEEtran}
 \bibliography{paper}
