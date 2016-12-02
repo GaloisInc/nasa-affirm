@@ -17,6 +17,7 @@
 \usetikzlibrary{positioning}
 
 \newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}}
+\newcommand{\OMH}{\ensuremath{\mathrm{OMH}}}
 \newcommand{\Id}{\ensuremath{\mathrm{Id}}}
 \newcommand{\Msg}{\ensuremath{\mathrm{Msg}}}
 
@@ -90,7 +91,7 @@ There are at least two classes of abstractions that separate traditional models 
 
 In this paper, we develop a formal model to address these concerns. We combine ideas from the literature and folklore to build scalable and modular formal models of fault-tolerant distributed systems. We describe a generic formal model for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. There are three aspects of the model: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) \emph{synchronous observers}, originally from the synchronous languages community~\cite{Halbwachs-Lagnier:92,Halbwachs-Lagnier:94} and popularized by Rushby for model-checking~\cite{Rushby:SAS14}; and (3) \emph{abstract state machines}, useful for abstracting counterexamples. The model is suitable for infinite-state model-checking.
 
-To demonstrate the modeling technique, in Section~\ref{sec:byz} we present a formally-verified implementation of the Oral Messages Hybrid algorithm (OMH)~\cite{Lincoln-Rushby}, implementing the Boyer-Moore Fast Majority Vote algorithm for algorithm~\cite{Boyer-Moore:91}. The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm. In Section~\ref{sec:experimental}, we give performance metrics for the model. First, we benchmark the model, showing that despite the additional complexity, it scales farther than other model-checking verifications at the algorithmic level. The scalability is due principally to specifying invariants and using $k$-induction in SRI's SAL model-checker~\cite{sal}. Developing invariants requires some user guidance. A user should not have to discover all new invariants for new protocols or implementations. We show that most of the lemmas required are not protocol specific and are modular, concerning only specific aspects of the system. To demonstrate this, we modify the OHM implementation in various ways to show that only local modifications are required to the model and proofs.
+To demonstrate the modeling technique, in Section~\ref{sec:byz} we present a formally-verified implementation of the Oral Messages Hybrid algorithm (\OMH)~\cite{Lincoln-Rushby}, implementing the Boyer-Moore Fast Majority Vote algorithm for algorithm~\cite{Boyer-Moore:91}. The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm. In Section~\ref{sec:experimental}, we give performance metrics for the model. First, we benchmark the model, showing that despite the additional complexity, it scales farther than other model-checking verifications at the algorithmic level. The scalability is due principally to specifying invariants and using $k$-induction in SRI's SAL model-checker~\cite{sal}. Developing invariants requires some user guidance. A user should not have to discover all new invariants for new protocols or implementations. We show that most of the lemmas required are not protocol specific and are modular, concerning only specific aspects of the system. To demonstrate this, we modify the OHM implementation in various ways to show that only local modifications are required to the model and proofs.
 
 Finally, in Section~\ref{sec:related} we describe related work, and we make concluding remarks in Section~\ref{sec:conclusions}.
 
@@ -339,12 +340,14 @@ Intuitively, there are subsets of the overall state space which are important to
 % ------------------------------------------------------------
 \section{Putting it Together: Compositional Modeling and Verification for Oral Messages}\label{sec:byz}
 
-To demonstrate the model and techniques, we model an implementation of the Oral Messages Hybrid (OMH) algorithm~\cite{}, a more sophisticated version of the class Oral Messages (OM) algorithm. OM was first formulated by Lamport, Shostak, and Pease~\cite{om} to achieve agreement in a distributed system while tolerating Byzantine faults. OMH was originally developed by Thambidurai and Park~\cite{hybrid} to achieve the same result in the presence of a more sophisticated fault model that includes symmetric and benign faults. However, OMH had a bug, as originally formulated, which was corrected and formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{csl-93-2}.
+To demonstrate the model and techniques, we model an implementation of the Oral Messages Hybrid ($\OMH$) algorithm~\cite{csl-93-2}, a more sophisticated version of the classic Oral Messages ($\OM$) algorithm. $\OM$ was first formulated by Lamport, Shostak, and Pease~\cite{om} to achieve agreement in a distributed system while tolerating Byzantine faults. $\OMH$ was originally developed by Thambidurai and Park~\cite{hybrid} to achieve the same result in the presence of a more sophisticated fault model that includes symmetric and benign faults. However, $\OMH$ had a bug, as originally formulated, which was corrected and formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{csl-93-2}.
 
 First, we briefly describe the algorithm, sketch our model of the algorithm within the model presented in Section~\ref{sec:model}, then describe it's invariants.
 
-\subsection{OMH(1) Algorithm}
-OMH is a recursive algorithm that proceeds in rounds of communication. Let $OMH(m)$ be a recursive function implementing the algorithm, parameterized by the number of rounds, $m$. Consider a finite set of nodes $N$. Distinguish one node as the \emph{general}, $g$, and the remaining nodes $L = N \setminus \{g\}$ as the \emph{lieutenants}. We assume the identity of any general or lieutenant cannot be spoofed. Broadcast communication proceeds in rounds. Denote any message that is detectably faulty (e.g., fails a CRC) or is absent, by $ERR$. Additionally, in the algorithm, nodes report on values they have previously received. In doing so, nodes must differentiate \emph{reporting} $ERR$ from an $ERR$ itself. Let $R$ denote that an error is being reported. Finally, let $V$ be a special, designated value.
+\ben{The word "model" is very overloaded in the paper so far. I wonder if we could use a different word like "modeling framework", or something more concise, for the one conotation and just "model" for the concrete mathematical description of a particular system?}
+
+\subsection{$\OMH(m)$ Algorithm}
+$\OMH$ is a recursive algorithm that proceeds in rounds of communication. Let $\OMH(m)$ be a recursive function implementing the algorithm, parameterized by the number of rounds, $m$. Consider a finite set of nodes $N$. Distinguish one node as the \emph{general}, $g$, and the remaining nodes $L = N \setminus \{g\}$ as the \emph{lieutenants}. We assume the identity of any general or lieutenant cannot be spoofed. Broadcast communication proceeds in rounds. Denote any message that is detectably faulty (e.g., fails a CRC) or is absent, by $ERR$. Additionally, in the algorithm, nodes report on values they have previously received. In doing so, nodes must differentiate \emph{reporting} $ERR$ from an $ERR$ itself. Let $R$ denote that an error is being reported. Finally, let $V$ be a special, designated value.
 
 %% The goal of the algorithm is for each of the lieutenants to agree on the value sent by $g$ in the presence of a Byzantine faulty general or lieutenants. More precisely, we assume the identity of a sender cannot be spoofed, broadcast communication proceeds in synchronous rounds such that the absence of a message in a round can be detected by the receiver (let $None$ be a constant used when a message is detectably incorrect, including a lack of message), and a Byzantine faulty sender can arbitrary corrupt or not send a message, but there are no other faults in the system.
 
@@ -355,15 +358,15 @@ The algorithm is recursively defined:
 \item {\bf $OM(m)$, $m > 0$}:
   \begin{enumerate}
   \item $g$ broadcasts a value to each lieutenant, $l$.
-  \item\label{om:two} Let $l_v$ be the value received by $l \in L$ from $g$. Then for each $l$, execute $OMH(m-1)$, assigning $l$ to be the general and $L \setminus \{l\}$ to be the lieutenants. $l$ sends $l_v$ or $R$, if $l_v = ERR$.
+  \item\label{om:two} Let $l_v$ be the value received by $l \in L$ from $g$. Then for each $l$, execute $\OMH(m-1)$, assigning $l$ to be the general and $L \setminus \{l\}$ to be the lieutenants. $l$ sends $l_v$ or $R$, if $l_v = ERR$.
   \item For each lieutenant $l \in L$, remove all $ERR$ values received in Step~\ref{om:two} from executing $OHM(m-1)$. Compute the majority value over the remaining values, or $V$ if there is no majority. If the majority value is $R$, return $E$.
   \end{enumerate}
 \end{itemize}
 
 \noindent
-In particular, $OMH(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
+In particular, $\OMH(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
 
-OMH is designed to preserve \emph{validity} and \emph{agreement}
+$\OMH$ is designed to preserve \emph{validity} and \emph{agreement}
 properties. Validity states that if the general is nonfaulty, then every lieutenant outputs the value sent by the general. More formally, let the general broadcast $v \neq ERR$, and let $l_i$ denote the output for lieutenant $i$:
 %
 \begin{equation}
@@ -487,7 +490,7 @@ Here we present two classes of experimental results. First, we demonstrate the s
       \hline
   \end{tabular}
   \label{fig:benchmark}
-  \caption{Benchmark of full proof computation time for OMH(1) implementation. Times are in seconds with a timeout (TO) limit of one hour. Dashes ('-') denote no benchmark was run.}
+  \caption{Benchmark of full proof computation time for $\OMH(1)$ implementation. Times are in seconds with a timeout (TO) limit of one hour. Dashes ('-') denote no benchmark was run.}
 \end{figure}
 
 The benchmarks were performed on a server with Intel Xeon E312xx (Sandy
@@ -537,7 +540,7 @@ Moreover, we are agnostic about how lemmas are discovered. As techniques like IC
 
 The Oral Messages algorithm and its variants have a long history of formal verification, making it a good test-case for comparing and contrasting verification tools~\cite{pvs}. The Oral Messages algorithm was presented in the landmark paper by Lamport, Shostak, and Pease~\cite{om}. Later, a hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. OM(1) was subsequently verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement OM(1) is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and OM(1) is specialized to a four-process system. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{csl-93-2}.
 
-Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. That said, their model of OM(1) (not OMH(1)), timeouts after 10~hours, and we assume a voting algorithm is not explicitly specified. \lee{for what size? Also, Rushby's model?} Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of OM(1) as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
+Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. That said, their model of $\OM(1)$ (not $\OMH(1)$), timeouts after 10~hours, and we assume a voting algorithm is not explicitly specified. \lee{for what size? Also, Rushby's model?} Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of OM(1) as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
 
 \lee{mention that ASMs similar to disjunction invariants}
 
