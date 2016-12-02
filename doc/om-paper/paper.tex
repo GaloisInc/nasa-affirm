@@ -78,6 +78,8 @@ as the fault model, timing constraints, and local node behavior require only loc
 to the model and proofs. This work is carried out in SAL.
 \end{abstract}
 
+\lee{grep to get consistent manifest/benign, also lieutenant vs relay/receiver.}
+
 \section{Introduction}
 
 \lee{talk about Amazon/TLA? Paxos made live?}
@@ -179,6 +181,8 @@ The event of receiving a message initiates a process to update its local state m
 \subsection{Synchronous Observers}\label{sec:sync}
 Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables, i.e. they are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{lustre:ieee}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the present domain in~\cite{Rushby:SAS14}. In Section~\ref{sec:sync-model} we define synchronous observers and then describe their application to modeling faults in Section~\ref{sec:kibitzer}.
 
+\lee{what we have defined are actually strictly stronger than synchronous observers since they can modify state.}
+
 \subsubsection{Model}
 A synchronous observer is of the form
 $$\mathcal{S} | \mathcal{O}$$
@@ -241,6 +245,9 @@ There are two practical benefits of the synchronous observer approach. First, th
 
 \subsubsection{The Synchronous Kibitzer}\label{sec:kibitzer}
 Synchronous observers can be used to model the environment, and in particular, inject faults in a compositional way. The typical approach to injecting faults into a formal model of a distributed system is to add new state variables to each process representing its fault state. Then additional state variables are added to represent the non-determinism introduced by faults into the state or messages by a process.
+
+\lee{cite abstractions paper and point out that we can model faults on transmission rather than node}
+
 
 %% This straightforward approach introduces additional state and nondeterminism, reducing the scalability of model-checking. Modeling faults is particularly expensive given that additional state and nondeterminism is added to each process. These scalability issues are noted throughout the literature. For example, \lee{TTA startup paper, helmut's paper, etc.}
 
@@ -506,24 +513,37 @@ and 5 receivers the time is 315s (compared to timeout above). See Figure
 
 \begin{figure}
   \centering
-  \begin{tabular}{p{3cm}|p{3cm}|l|l|}
-                                  & Modules modified    & Lemmas modified & Lemma classes modified\\
-  \hline \hline
-  Byzantine-only fault model      & 0                   & 0               & 0 \\
+  \begin{tabular}{|p{3cm}|p{3cm}|l|l|}
   \hline
-  Time-triggered message-passing  & \texttt{clock}, \texttt{relay}
-                                  , \texttt{receiver}   & 0               & 0 \\
+                                  & Transition systems & Definitions & Invariants & Invariant classes \\
+  \hline \hline
+  Omissive-asymetric faults       & 0                   & 4          & 2          & 1                 \\
+  \hline
+  Time-triggered messaging        & 3                   & \lee{todo} & 0          &                   \\
+  Mid-value selection             &\lee{todo}           &  \lee{todo}&\lee{todo}  & \lee{todo}        \\
   \hline
   \end{tabular}
   \caption{Refactoring effort for protocol modifications.}
   \label{fig:effort}
 \end{figure}
-To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and discover the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{sec:effort} and sketched below.
+To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and report the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{sec:effort} and sketched below. In the table, for each modification, we report how much of the model must be modified. Specifically, we report on the number of synchronously-composed transition systems, function definitions, invariants, and invariants classes (as defined in Section~\ref{sec:invariants}) that must be modified.
 
-\paragraph{Fault model.}
-Modifying the fault model is easy. In involves modifying the definition of a single function, \texttt{mfa}, that takes as an argument the static assignment of node identifiers to faults. Moreover
+\paragraph{Omissive asymetric faults.}
+Remove faults already described by the fault model is easy. Recall that in our model faults do not appear in the system specification and only operate on the calendar. Removing a fault from the system requires only setting the number of a particular kind of faults to zero in the maximum fault assumption.
+
+Adding new kinds of faults requires more work but is modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a manifest fault~\cite{}, to the fault model. Doing so requires modifying none of transition systems. However, we modify four definitions (\texttt{msg()}, characterizing the result on the calendar due to a faulty message; \texttt{omissive_asymmetric_fault_constraint()}, defining the fault, and two functions that characterize the overall maximum fault assumption). Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
 
 \paragraph{Time-triggered messaging.}
+Oral Messages and its variants are synchronous protocols, in which communication occurs in rounds. In our original model, the nodes do not explicitly depend on a clock. 
+
+
+\lee{todo}
+
+\paragraph{Mid-value selection.}
+
+\lee{todo}
+
+\lee{any other modifications?}
 
 \subsection{Proof Effort Remarks}
 The lemmas described in Section~\ref{sec:invariants} are constructed by-hand and represent multiple days of effort, but that effort includes both model and protocol construction and generalization as well as verification. The counterexamples returned by SAL are very useful for strengthening invariants, but tedious to analyze---a model with five relays and two receivers contains 90 state variables, and there are known counterexamples to models that size~\cite{csl-93-2}. Once we developed the ASM synchronously-composed observer, the verification effort was sped up considerably.
