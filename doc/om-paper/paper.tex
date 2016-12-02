@@ -180,6 +180,9 @@ The event of receiving a message initiates a process to update its local state m
 \lee{note that we use calendar automata for non real-time system}
 
 \subsection{Synchronous Observers}\label{sec:sync}
+
+\lee{Lee will rework this section; update references to it.}
+
 Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables, i.e. they are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{lustre:ieee}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the present domain in~\cite{Rushby:SAS14}. In Section~\ref{sec:sync-model} we define synchronous observers and then describe their application to modeling faults in Section~\ref{sec:kibitzer}.
 
 \lee{what we have defined are actually strictly stronger than synchronous observers since they can modify state.}
@@ -305,6 +308,9 @@ But the relationship between many of the state variables often has an intuitive 
 This idea is an implementation of abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize state machines to operate over arbitrary data structures~\cite{asm}. In our context, we require only a restricted form of ASMs known as a \emph{sequential small-step ASM}:
 
 \begin{definition}[Abstract state machine (ASM)]
+
+\lee{Ben will redo. I'd just remove the Gurevich reference}
+
 Let $\mathcal{M} = (S, I, \rightarrow)$ be a transition system and let $B \subseteq 2^S$ be a set of predicates over $S$. Then $\mathcal{M}$ is an ASM iff the transition relation $\rightarrow$ is of the form
 $$\textnormal{if } b_0(s_0) \textnormal{ then } s'_0 \textnormal{ else if } b_1(s_1) \textnormal{ then } s'_1 \ldots \textnormal{ else } b_n(s_n) \textnormal{ then } s'_n$$
 \noindent
@@ -522,7 +528,7 @@ and 5 receivers the time is 315s (compared to timeout above). See Figure
   \hline \hline
   Omissive-asymetric faults       & 0                   & 4          & 2          & 1                 \\
   \hline
-  Time-triggered messaging        & 3                   &            &            &                   \\
+  Time-triggered messaging        & 3                   & 3          & 5          & 2                 \\
   \hline
   Mid-value selection             &\lee{todo}           &  \lee{todo}&\lee{todo}  & \lee{todo}        \\
   \hline
@@ -530,6 +536,9 @@ and 5 receivers the time is 315s (compared to timeout above). See Figure
   \caption{Refactoring effort for protocol modifications.}
   \label{fig:effort}
 \end{figure}
+
+\lee{Ben: add fault-model removed plus mid-value selection models}
+
 To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and report the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{sec:effort} and sketched below. In the table, for each modification, we report how much of the model must be modified. Specifically, we report on the number of synchronously-composed transition systems, function definitions, invariants, and invariants classes (as defined in Section~\ref{sec:invariants}) that must be modified.
 
 \paragraph{Omissive asymetric faults.}
@@ -538,7 +547,11 @@ Remove faults already described by the fault model is easy. Recall that in our m
 Adding new kinds of faults requires more work but is modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a manifest fault~\cite{}, to the fault model. Doing so requires modifying none of transition systems. However, we modify four definitions (\texttt{msg()}, characterizing the result on the calendar due to a faulty message; \texttt{omissive\_asymmetric\_fault\_constraint()}, defining the fault, and two functions that characterize the overall maximum fault assumption). Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
 
 \paragraph{Time-triggered messaging.}
-A \emph{time-triggered} distributed system is one in which nodes are independently clocked, but clock constraints (ensured by periodic clock synchronization) allow the model to appear as if it is executing synchronously. 
+A \emph{time-triggered} distributed system is one in which nodes are independently clocked, but clock constraints (ensured by periodic clock synchronization) allow the model to appear as if it is executing synchronously~\cite{}.
+
+We create three definitions: encoding nondeterministic message delay, and two definitions that are helpers in invariants. The guards in the relays and receivers are modified to latch messages received outside the specified windows as being manifest faults. Additionally, the ASM definition is modified to track the times in the calendar, not just the messages. Two new invariants calendar invariants are introduced, stating that the calendar messages are either empty, or their time-stamps fall within the respective message windows. Then, three invariants classifying faults are relaxed to allow for the possibility of faulty nodes sending manifestly-faulty messages.
+
+
 
 Oral Messages and its variants are synchronous protocols, in which communication occurs in rounds. Typically, this is modeled by synchronously composing lieutenants. Our calendar-based model is more general, in which all nodes are asynchronously composed. That said, 
 
