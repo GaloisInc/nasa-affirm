@@ -513,13 +513,14 @@ and 5 receivers the time is 315s (compared to timeout above). See Figure
 
 \begin{figure}
   \centering
-  \begin{tabular}{|p{3cm}|p{3cm}|l|l|}
+  \begin{tabular}{|p{3cm}|l|l|l|l|}
   \hline
-                                  & Transition systems & Definitions & Invariants & Invariant classes \\
+                                  & Transition systems  &Definitions & Invariants & Invariant classes \\
   \hline \hline
   Omissive-asymetric faults       & 0                   & 4          & 2          & 1                 \\
   \hline
-  Time-triggered messaging        & 3                   & \lee{todo} & 0          &                   \\
+  Time-triggered messaging        & 3                   &            &            &                   \\
+  \hline
   Mid-value selection             &\lee{todo}           &  \lee{todo}&\lee{todo}  & \lee{todo}        \\
   \hline
   \end{tabular}
@@ -531,10 +532,12 @@ To demonstrate the modularity of the model and verification approach, in this se
 \paragraph{Omissive asymetric faults.}
 Remove faults already described by the fault model is easy. Recall that in our model faults do not appear in the system specification and only operate on the calendar. Removing a fault from the system requires only setting the number of a particular kind of faults to zero in the maximum fault assumption.
 
-Adding new kinds of faults requires more work but is modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a manifest fault~\cite{}, to the fault model. Doing so requires modifying none of transition systems. However, we modify four definitions (\texttt{msg()}, characterizing the result on the calendar due to a faulty message; \texttt{omissive_asymmetric_fault_constraint()}, defining the fault, and two functions that characterize the overall maximum fault assumption). Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
+Adding new kinds of faults requires more work but is modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a manifest fault~\cite{}, to the fault model. Doing so requires modifying none of transition systems. However, we modify four definitions (\texttt{msg()}, characterizing the result on the calendar due to a faulty message; \texttt{omissive\_asymmetric\_fault\_constraint()}, defining the fault, and two functions that characterize the overall maximum fault assumption). Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
 
 \paragraph{Time-triggered messaging.}
-Oral Messages and its variants are synchronous protocols, in which communication occurs in rounds. In our original model, the nodes do not explicitly depend on a clock. 
+A \emph{time-triggered} distributed system is one in which nodes are independently clocked, but clock constraints (ensured by periodic clock synchronization) allow the model to appear as if it is executing synchronously. 
+
+Oral Messages and its variants are synchronous protocols, in which communication occurs in rounds. Typically, this is modeled by synchronously composing lieutenants. Our calendar-based model is more general, in which all nodes are asynchronously composed. That said, 
 
 
 \lee{todo}
