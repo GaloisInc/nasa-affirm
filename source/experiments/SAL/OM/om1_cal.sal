@@ -353,7 +353,7 @@ BEGIN
     GLOBAL
       cal: CALENDAR,
       t:   TIME,
-      f:   FAULTS
+      f:   FAULTS % defined but unconstrained here in this module
     INPUT
       source_done: BOOLEAN,
       relays_done: ARRAY RELAYS OF BOOLEAN,
