@@ -17,6 +17,8 @@
 \usetikzlibrary{positioning}
 
 \newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}}
+\newcommand{\Id}{\ensuremath{\mathrm{Id}}}
+\newcommand{\Msg}{\ensuremath{\mathrm{Msg}}}
 
 %% IEEE
 %% \newtheorem{definition}{Definition}
@@ -124,35 +126,38 @@ The following laws must hold of a transition system $\mathcal{M}$ implementing a
 
 \item \label{cal:d} In all states, if the current time equals a timeout, then the only transitions enabled are calendar event updates associated with the timeout: $\forall \sigma \in S$, $\exists (e_i, t_i) \in \sigma(cal)$ such that $\sigma(now) = t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma'(now) = \sigma(now)$, $\sigma'(c_j) = \sigma(c_j)$ for all $c_j \in \sigma(c)$ such that $c_j \neq c_i$, and $\sigma'(t_i) > \sigma(t_i)$.
 \end{enumerate}
+\ben{Do we also require that $c_i \notin \sigma'(c)$ ?}
 
 From the definitions, it follows that in every state, the timeouts are never in the past:
 \begin{lemma}[Future timeouts]\label{lem:ft}
 $\forall \sigma \in S$, $(e_i, t_i) \in \sigma(cal)$, $\sigma(now) \leq t_i$.
 \end{lemma}
-\begin{proof}
-By induction on states. In an initial state, the property holds immediately (Law~\ref{cal:a}). In the induction step, suppose $\sigma(now) \leq t_i$, for all $t_i$. If $\sigma(now) < t_i$, for all $t_i$, then the only possible transition is a time progress update to the minimum timeout (Law~\ref{cal:c}). Otherwise, if $\sigma(now) = t_i$, for some $t_i$, then the only possible transition is a calendar event update, incrementing $t_i$ but not $\sigma(now)$ (Law~\ref{cal:d}).
-\end{proof}
+% \begin{proof}
+% By induction on states. In an initial state, the property holds immediately (Law~\ref{cal:a}). In the induction step, suppose $\sigma(now) \leq t_i$, for all $t_i$. If $\sigma(now) < t_i$, for all $t_i$, then the only possible transition is a time progress update to the minimum timeout (Law~\ref{cal:c}). Otherwise, if $\sigma(now) = t_i$, for some $t_i$, then the only possible transition is a calendar event update, incrementing $t_i$ but not $\sigma(now)$ (Law~\ref{cal:d}).
+% \end{proof}
 
 \noindent
 Furthermore, time is monotonic:
 \begin{lemma}[Monotonic time]
 $\forall \sigma, \sigma' \in S$, if $\sigma \rightarrow \sigma'$, then $\sigma'(now) \geq \sigma(now)$.
 \end{lemma}
-\begin{proof}
-From Lemma~\ref{lem:ft}, in $\sigma(now) \leq t_i$, for all $(e_i, t_i) \in \sigma(cal)$. For any $\sigma'$ such that $\sigma \rightarrow \sigma'$, either there is a time progress update (Law~\ref{cal:c}) or a calendar event update (Law~\ref{cal:d}). In the first case, $\sigma(now) < \sigma'(now)$, and in the second case, $\sigma(now) = \sigma'(now)$.
-\end{proof}
+% \begin{proof}
+% From Lemma~\ref{lem:ft}, in $\sigma(now) \leq t_i$, for all $(e_i, t_i) \in \sigma(cal)$. For any $\sigma'$ such that $\sigma \rightarrow \sigma'$, either there is a time progress update (Law~\ref{cal:c}) or a calendar event update (Law~\ref{cal:d}). In the first case, $\sigma(now) < \sigma'(now)$, and in the second case, $\sigma(now) = \sigma'(now)$.
+% \end{proof}
+
+Proofs of these two lemmas are straightforward so we omit them here.
 
 In a distributed system, it is convenient to distinguish global actions and local actions. Global actions are principally interprocess communication, while local actions are those carried out by each process to update its local state and produce new messages to broadcast. While both global and local actions can both be modeled as events in a calendar automata, doing so is generally overkill and complicates the model. From the global perspective, individual processes can update their local state atomically.
 
-Again following Dutetre and Sorea, we associate calendar events with channels in a distributed system~\cite{dutetre}. Specializing calendars to message passing does not lose generality since all external communication from an individual process can be abstracted as message passing. Furthermore, fault models can be abstracted to act over channels rather than processes~\cite{abstractions}. The calendar introduces real-time constraints on when processes send and receive messages.
+Again, following Dutetre and Sorea, we associate calendar events with channels in a distributed system~\cite{dutetre}. Specializing calendars to message passing does not lose generality since all external communication from an individual process can be abstracted as message passing. Furthermore, fault models can be abstracted to act over channels rather than processes~\cite{abstractions}. The calendar introduces real-time constraints on when processes send and receive messages.
 
-Assume processes are indexed from a finite set $Id \subset \mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $Msg$. Given a channel and a timeout, let $send$ be a relation on messages sent on a channel at a given time:
-$$send \subseteq Id \times Id \times \mathbb{R} \times Msg$$
+Assume processes are indexed from a finite set $\Id \subset \mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $\Msg$. Given a channel and a timeout, let $send$ be a relation on messages sent on a channel at a given time:
+$$send \subseteq \Id \times \Id \times \mathbb{R} \times \Msg$$
 So $send(i, j, t, m)$ holds iff $i$ sends to $j$ message $m$ at time $t$. Likewise, let
-$$recv \subseteq Id \times Id \times \mathbb{R} \times Msg$$
+$$recv \subseteq \Id \times \Id \times \mathbb{R} \times \Msg$$
 be a relation on messages received on a channel at a time, so that $recv(i, j, t, m)$ holds iff the message $m$ received by $j$ from $i$ at time $t$.
 
-In the non-faulty case, we require that messages received were previously sent and not previously received: if $recv(i, j, t, m)$, then $\exists t'$ such that $send(i, j, t', m)$ where $t' < t$, and $\neg\exists t''$ such that $t' < t'' < t$ and $recv(i, j, t'', m) = recv(i, j, t, m)$. (We address faults in Section~\ref{sec:kibitzer}.)
+In the absence of faults, we require that messages received were previously sent and not previously received: if $recv(i, j, t, m)$, then $\exists t'$ such that $send(i, j, t', m)$ where $t' < t$, and $\neg\exists t''$ such that $t' < t'' < t$ and $recv(i, j, t'', m) = recv(i, j, t, m)$. (We address faults in Section~\ref{sec:kibitzer}.)
 
 Then an event calendar for sending and receiving messages on channels is the union of the $send$ and $recv$ relations.
 
@@ -164,7 +169,7 @@ The event of receiving a message initiates a process to update its local state m
 \lee{note that we use calendar automata for non real-time system}
 
 \subsection{Synchronous Observers}\label{sec:sync}
-Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables. Synchronous observers are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the domain~\cite{}. In Section~\ref{sec:sync-model} we define synchronous observers and then describe their application to modeling faults in Section~\ref{sec:kibitzer}.
+Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables, i.e. they are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{lustre:ieee}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the present domain in~\cite{Rushby:SAS14}. In Section~\ref{sec:sync-model} we define synchronous observers and then describe their application to modeling faults in Section~\ref{sec:kibitzer}.
 
 \subsubsection{Model}
 A synchronous observer is of the form
@@ -178,11 +183,11 @@ where `$|$' denotes synchronous composition of transition systems (defined forma
 \end{definition}
 
 \begin{definition}[Reachable states]
-For a transition relation $\rightarrow$ over the states of $S$, for states $s_0, s_1, \ldots, s_k \in S$, $s_k$ is reachable from $s_0$ iff
-$$s_0 \rightarrow s_1 \rightarrow \ldots \rightarrow s_k$$
+For a transition relation $\rightarrow$ over the states of $S$, for states $s_0,  s \in S$, we say $s$ is reachable from $s_0$ iff there exist states $s_1, \ldots, s_k \in S$ such that
+$$s_0 \rightarrow s_1 \rightarrow \ldots \rightarrow s_k \rightarrow s$$
 \end{definition}
 \noindent
-In particular, a state $s$ is reachable from $s$.
+By convention, every state $s$ is reachable from itself.
 
 In the following definitions, let
 $M = (S, I, \rightarrow)$
@@ -243,11 +248,11 @@ To address these issues, we introduce a synchronous observer that injects faults
 
 %% In specifying a fault-tolerant system, we must also specify a \emph{maximum fault assumption} (MFA), which specifies the maximum number of of each kind of fault that may be present in the system for some system property to hold. 
 
-Define an enumeration of fault types $$\textnormal{FAULT\_TYPE} = \{none, byz, sym, man\}$$ As in the previous section, let $Id \subset \mathbb{N}$ be a finite set of indices, and let the variable $$faults: Id \rightarrow \textnormal{FAULT\_TYPE}$$ range over possible mappings from process indices to faults.
+Define an enumeration of fault types $$\textnormal{FAULT\_TYPE} = \{none, byz, sym, man\}$$ As in the previous section, let $\Id \subset \mathbb{N}$ be a finite set of indices, and let the variable $$faults: \Id \rightarrow \textnormal{FAULT\_TYPE}$$ range over possible mappings from process indices to faults.
 
 The hybrid fault model assumes a broadcast model of communication.
 % Define $rnd: \mathbb{R} \rightarrow \mathbb{N}$ such that if $rnd(t_0) < rnd(t_1)$, then $t_0 < t_1$.
-A $broadcast: Id \rightarrow 2^{Id} \rightarrow \mathbb{R} \rightarrow Msg \rightarrow 2^{E}$ takes a sender, a set of receivers, a real-time, and a message to send each receiver, and returns a set of calendar events:
+A $broadcast: \Id \rightarrow 2^{\Id} \rightarrow \mathbb{R} \rightarrow \Msg \rightarrow 2^{E}$ takes a sender, a set of receivers, a real-time, and a message to send each receiver, and returns a set of calendar events:
 $$broadcast(i, R, t, m) = \{m | j \in R \textnormal{ and } send(i, j, t) = m\}$$
 
 \lee{msg in SAL is recv here}
@@ -255,7 +260,7 @@ $$broadcast(i, R, t, m) = \{m | j \in R \textnormal{ and } send(i, j, t) = m\}$$
 With this machinery, we can define the semantics of faults by constraining the relationship between a message broadcast and the values received by the recipients. For a nonfaulty process that broadcasts, every recipient receives the sent message.
 \begin{align*}
 &nonfaulty\_constraint =\\
-  &\quad \forall i, j \in Id, t \in \mathbb{R}.\\
+  &\quad \forall i, j \in \Id, t \in \mathbb{R}.\\
   &\quad\quad faults(i) = none\\
   &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = send(i, j, t)
 \end{align*}
@@ -263,7 +268,7 @@ With this machinery, we can define the semantics of faults by constraining the r
 For symmetric faults, we there is no requirement that the messages sent are the ones received, only that every recipient receives the same value.
 \begin{align*}
 &sym\_constraint =\\
-  &\quad \forall i, j, k \in Id, t \in \mathbb{R}.\\
+  &\quad \forall i, j, k \in \Id, t \in \mathbb{R}.\\
   &\quad\quad (faults(i) = sym \textnormal{ and } broadcast(i, \{j, k\}, t, m))\\
   &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = recv(i, k, t)
 \end{align*}
