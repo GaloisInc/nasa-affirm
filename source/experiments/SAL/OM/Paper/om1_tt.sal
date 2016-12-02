@@ -396,9 +396,11 @@ BEGIN
     GLOBAL cal: CALENDAR
     INPUT  f: FAULTS, t: TIME
     OUTPUT
-      latch: MESSAGE
+      latch: MESSAGE,
+      latched? : BOOLEAN
 INITIALIZATION
     latch      = missing;
+    latched?   = FALSE;
 TRANSITION
     [
       relay_broadcast:
@@ -409,6 +411,11 @@ TRANSITION
         cal' = LET m:MESSAGE = wrap(msg(t, cal, f, source_id, i)) IN
                LET cal1:CALENDAR = msg_relay_bcast(cal, i, m, t) IN
                msg_consume(cal1, source_id, i);
+        latched?' = TRUE;
+     []
+      (1 > t AND t <= 2) -->
+     []
+      (t > 2) AND NOT latched? --> latch' = wrap(bad_msg);
     ]
 END;
 
@@ -564,8 +571,10 @@ END;
 system: MODULE =
         clock
      [] source
-     [] (WITH OUTPUT latches: ARRAY RELAYS OF MESSAGE
-           ([] (x:RELAYS): RENAME latch TO latches[x]
+     [] (WITH OUTPUT latches:   ARRAY RELAYS OF MESSAGE
+         WITH OUTPUT latcheds?: ARRAY RELAYS OF BOOLEAN
+           ([] (x:RELAYS):    RENAME latch TO latches[x]
+                           IN RENAME latched? TO latcheds?[x]
                            IN relay[x]))
      [] (WITH OUTPUT receivers_done: ARRAY RECEIVERS OF BOOLEAN
          WITH OUTPUT counters:       ARRAY RECEIVERS OF [0..num_relays]
@@ -992,10 +1001,19 @@ fault_propagation: LEMMA system_obs |-
 %
 % sal-inf-bmc -i -d 1 -l fault_propagation om1_tt.sal source_to_latch
 source_to_latch: LEMMA system_obs |-
-  G(FORALL (i: RELAYS): latches[i] = missing OR
-      (    (f[source_id] = nonfaulty => latches[i] = good_msg)
+  G(FORALL (i: RELAYS):
+      (NOT latcheds?[i])
+    OR
+      (    latcheds?[i]
+       AND (f[source_id] = nonfaulty => latches[i] = good_msg)
        AND (f[source_id] = byzantine OR f[source_id] = symmetric =>
               latches[i] = wrap(uninterp_msg(source_id, i)))));
+
+% source_to_latch: LEMMA system_obs |-
+%   G(FORALL (i: RELAYS): latches[i] = missing OR
+%       (    (f[source_id] = nonfaulty => latches[i] = good_msg)
+%        AND (f[source_id] = byzantine OR f[source_id] = symmetric =>
+%               latches[i] = wrap(uninterp_msg(source_id, i)))));
 
 % manifest_relay - when a relay is manifestly faulty, receivers will only get
 % 'bad_msg' from it.
@@ -1026,10 +1044,14 @@ uninterp_msg_relay: LEMMA system_obs |-
 % Proved
 % sal-inf-bmc -i -d 1 -l fault_propagation om1_tt manifest_source
 manifest_source: LEMMA system_obs |-
-  G((f[source_id] = manifest =>
-      FORALL (i: RELAYS): latches[i] = missing OR latches[i] = recv_bad_msg)
+  G(
+    (f[source_id] = manifest =>
+      FORALL (i: RELAYS): NOT latcheds?[i] OR latches[i] = missing OR latches[i] = recv_bad_msg)
     AND
-    (EXISTS (i: RELAYS): latches[i] = recv_bad_msg => is_faulty?(f[source_id])));
+    (EXISTS (i: RELAYS): latches[i] = recv_bad_msg => is_faulty?(f[source_id]) OR NOT latcheds?[i]));
+
+latched_time: LEMMA system_obs |-
+  G(FORALL (i: RELAYS): t > 2 => latcheds?[i]);
 
 % missing_buffer_size - for each receiver: # messages currently received +
 % # of slots with 'missing' = total number of relays.
