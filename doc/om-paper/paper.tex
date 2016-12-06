@@ -545,22 +545,22 @@ Note that the theorems hold even in the degenerate cases of one relay or one rec
   \hline
                                   & Transition systems (7 total)  &Definitions\linebreak (58 total) & Invariants\linebreak (11 total) & Invariant classes (5 total) \\
   \hline \hline
-  Omissive-asymetric faults       & None                & 4 modified & 2 modified & faults             \\
+  No Fault Model                  & receivers & 8 modified & 2 modified & ASM, faults \\
   \hline
-  Time-triggered messaging        & source, relays, receivers & 3 new      & 2 new, 3 modified & calendar, faults \\
+  Omissive-asymetric faults       & None      & 4 modified & 2 modified & faults             \\
   \hline
-          Mid-value selection             & receivers         & 4 new, 3 modified & 2 modified & ASM, voting \\
+  Time-triggered messaging        & source, relays, receivers & 3 new & 2 new, 3 modified & calendar, faults \\
+  \hline
+  Mid-value selection             & receivers & 4 new, 3 modified & 2 modified & ASM, voting \\
   \hline
   \end{tabular}
   \caption{Refactoring effort for protocol modifications, measured by which portions of the model have to be modified.}
   \label{fig:effort}
 \end{figure}
 
-\lee{Ben: add fault-model removed plus mid-value selection models}
-
 To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and report the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{fig:effort} and sketched below. In the table, for each modification, we report how much of the model must be modified. We report on four aspects of the system: which transition systems making up the full model are modified (as described in Section~\ref{sec:model}), how many definitions have to be added or modified, the number of invariants that have to be added or modified, and which invariant classes (as defined in Section~\ref{sec:invariants}) those lemmas belong to.
 
-\paragraph{Omissive asymetric faults.}
+\paragraph{Omissive asymmetric faults.}
 Removing faults already described by the fault model is easy. Recall that in our model faults do not appear in the system specification and only operate on the calendar. Removing a fault from the system requires only setting the number of a particular kind of faults to zero in the maximum fault assumption.
 
 Adding new kinds of faults requires more work but is still modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a manifest fault~\cite{}, to the fault model. Doing so requires modifying none of transition systems. However, we modify four definitions (\texttt{msg()}, characterizing the result on the calendar due to a faulty message; \texttt{omissive\_asymmetric\_fault\_constraint()}, defining the fault, and two functions that characterize the overall maximum fault assumption). Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
@@ -571,10 +571,8 @@ A \emph{time-triggered} distributed system is one in which nodes are independent
 Changing the model to be time-triggered principally requires making the source, relays, and receivers driven explicitly by the passage of time. As well, a ``receive window'' is defined at which messages from non-faulty nodes should be received. Messages received outside the window are marked as coming from manifest-faulty senders. To implement a time-triggered model, we create three definitions: encoding nondeterministic message delay, and two definitions that are helpers in invariants. The guards in the relays and receivers are modified to latch messages received outside the specified windows as being manifest faults. Additionally, the ASM definition is modified to track the times in the calendar, not just the messages. Two new invariants calendar invariants are introduced, stating that the calendar messages are either empty, or their time-stamps fall within the respective message windows. Then, three invariants classifying faults are relaxed to allow for the possibility of faulty nodes sending manifestly-faulty messages.
 
 \paragraph{Mid-value selection.}
+Our $\OMH(1)$ model leverages majority vote in order to tolerate faults. Another choice for the fault masking algorithm used here is mid-value select (or median). This choice is more common in applications involving hardware, signal selection (where signal values cannot be relied on to exactly match even in the absence of faults), or cases where information about congruence is useful. To implement mid-value select in our model, we allow messages sent to take values in $\mathbb{R}$ and the receiver transition system is modified in two ways. First, a second buffer is introduced which will hold the sorted contents of the main buffer once voting has commenced. Second, a mid-value select function is called on the sorted buffer and the result is stored as the receiver's vote. The only invariants needing modification were the ASM definition (to account for the values stored by the new buffer and the relation between it and the main buffer) and the voting invariant.
 
-\lee{todo}
-
-\lee{any other modifications?}
 
 \subsection{Proof Effort Remarks}
 The lemmas described in Section~\ref{sec:invariants} are constructed by-hand and represent multiple days of effort, but that effort includes both model and protocol construction and generalization as well as verification. The counterexamples returned by SAL are very useful for strengthening invariants, but tedious to analyze---a model with five relays and two receivers contains 90 state variables, and there are known counterexamples to models that size~\cite{csl-93-2}. Once we developed the ASM synchronously-composed observer, the verification effort was sped up considerably.
