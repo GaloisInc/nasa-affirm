@@ -70,14 +70,10 @@ challenging to model-check given their large state space and
 non-determinism. The typical approach to controlling complexity is to construct
 ad-hoc abstractions of faults, message-passing, and behaviors.  However, these
 abstractions come at the price of divorcing the model from its implementation
-and making refactoring difficult. In this work, we present a systematic model for
-fault-tolerant distributed system verification that combines calendar automata,
-symbolic fault injection, and abstract state machines observers specialized for
-infinite-state model-checking. We demonstrate the efficacy of the framework by presenting the
-first model-checked \emph{implementation} of the Hybrid Oral Messages algorithm,
-using a fast majority vote, then demonstrate how modifications along axes such
-as the fault model, timing constraints, and local node behavior require only local modifications
-to the model and proofs. This work is carried out in SAL model-checker.
+and making refactoring difficult. In this work, we present a framework for
+fault-tolerant distributed system verification that combining ideas from the literature including calendar automata,
+symbolic fault injection, and abstract state machines observers, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being low-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require modular changes to the model and proofs.
+This work is carried out in SAL model-checker.
 \end{abstract}
 
 \lee{grep for synchronous observers section references}
@@ -90,13 +86,13 @@ The verification of this class of systems has usually been at the algorithmic le
 
 There are at least two classes of abstractions that separate protocol-level models of fault-tolerant distributed algorithms from their implementations.  One is to intertwine the environmental model with the system description. For example, the behaviors of nodes are naturally specified as a transition system in which transitions are guarded by the node's fault state. But faults are part of the environment; an implementation does not typically use its own fault status to choose actions! Another class of abstractions is used to simplify models.  For example, message passing might be abstracted with shared state, or a node's local behavior is elided and instead, the output is constrained by a \emph{specification} of the behavior.
 
-In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify Oral Messages Hybrid algorithm (\OMH)~\cite{Lincoln-Rushby}
+In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify several implementations of the Byzantine fault-tolerant Hybrid Oral Messages algorithm (\OMH)~\cite{Lincoln-Rushby}. The framework combines ideas from the literature and folklore to build scalable and modular formal models suitable for infinite-state model-checking, and it reduces the need for ad-hoc abstractions and optimizations while maintaining scalability. In Section~\ref{sec:model}, we present the important aspects of the framework, including \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal}, symbolic fault-injection, and abstract state machines for verification~\cite{}.
 
-. We combine ideas from the literature and folklore to build scalable and modular formal models of fault-tolerant distributed systems. We describe a generic formal framework for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. There are three aspects of the framework: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) symbolic fault injection for decomposing the effects of faults from the system specification, and (3) \emph{abstract state machines observers}, useful for abstracting counterexamples. The framework is suitable for infinite-state model-checking supported by satisfiability modulo theories (SMT).
+ %% There are three aspects of the framework: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) symbolic fault injection for decomposing the effects of faults from the system specification, and (3) \emph{abstract state machines observers}, useful for abstracting counterexamples. The framework is suitable for infinite-state model-checking supported by satisfiability modulo theories (SMT).
 
-To demonstrate the framework, in Section~\ref{sec:byz} focus on a particular representative algorithm as a case-study. We present a formally-verified implementation of the Oral Messages Hybrid algorithm (\OMH)~\cite{Lincoln-Rushby}, implementing the Boyer-Moore Fast Majority Vote algorithm for voting~\cite{mjrty}. The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
+We use the framework to verify low-level models of \OMH in which message passing is explicit, nodes are not enforced to execute strictly synchronously, and voting is explicit. In short, the models corresponds closely with an implementation of the algorithm. In Section~\ref{sec:byz}, we describe \OMH, an initial implementation model of it using the Boyer-Moore Fast Majority Vote algorithm~\cite{mjrty}, and a class of modular invariants; that is, invariants are grouped in a small set of classes with well-defined relationships. The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
 
-In Section~\ref{sec:experimental}, we give describe two sets of experiments on the model. First, we benchmark the model, showing that despite the additional complexity, it scales farther than other model-checking verifications at the algorithmic level. The scalability is due principally to specifying invariants and using $k$-induction in SRI's SAL model-checker~\cite{SAL}. Developing invariants requires some user guidance. A user should not have to discover all new invariants for new protocols or implementations. We show that most of the lemmas required are not protocol specific and are modular, concerning only specific aspects of the system, such as the timing, faults, or local node behavior. To demonstrate this, we modify the OHM implementation and show that in each case, only a small number of localized modifications are required to repair the model and proofs. The modifications we study are to add omissive-asymetric faults, make the implementation time-triggered, and replace the majority vote with a mid-value selection.
+In Section~\ref{sec:experimental}, we first show that despite being low-level, the model is scalable. Developing invariants requires some user guidance, and isolated changes to an implementation should require isolated modifications to the model and proof. To demonstrate this, we modify the \OMH implementation along the dimensions of faults (by adding an omissive-asymetric fault type~\cite{omissive}), time (by making a time-triggered model), and local behavior (by changing the majority vote to a mid-value selection) and show that in each case, the modifications are small and modular.
 
 Finally, in Section~\ref{sec:related} we describe related work, and we make concluding remarks in Section~\ref{sec:conclusions}.
 
@@ -368,9 +364,9 @@ Intuitively, there are subsets of the overall state space which are important to
 % \end{example}
 
 
-\section{Putting it Together: Compositional Modeling and Verification for Oral Messages}\label{sec:byz}
+\section{Modeling and Verification for Oral Messages}\label{sec:byz}
 
-To demonstrate the model and techniques, we model an implementation of the Oral Messages Hybrid ($\OMH$) algorithm~\cite{Lincoln-Rushby}, a more sophisticated version of the classic Oral Messages ($\OM$) algorithm. $\OM$ was first formulated by Lamport, Shostak, and Pease~\cite{om} to achieve agreement in a distributed system while tolerating Byzantine faults. $\OMH$ was originally developed by Thambidurai and Park~\cite{hybrid} to achieve the same result in the presence of a more sophisticated fault model that includes symmetric and benign faults. However, $\OMH$ had a bug, as originally formulated, which was corrected and the mended algorithm was formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{Lincoln-Rushby}.
+The Hybrid Oral Messages ($\OMH$) algorithm~\cite{Lincoln-Rushby} is a variant of the classic Oral Messages ($\OM$) algorithm~\cite{om}, originally developed by Thambidurai and Park~\cite{hybrid} to achieve distributed consensus in the presence of a hybrid fault model. However, $\OMH$ had a bug, as originally formulated, which was corrected and the mended algorithm was formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{Lincoln-Rushby}.
 
 First, we briefly describe the algorithm, sketch our model of the algorithm within the framework presented in Section~\ref{sec:model}, then describe it's invariants.
 
@@ -416,6 +412,8 @@ We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that faul
 
 
 \subsection{Model Sketch}\label{sec:sketch}
+
+\lee{we need to mention MJRTY here or in the modular verifiation section}
 
 We have implemented $\OMH(1)$ (as well as the variants described in Section~\ref{sec:modular}) in Symbolic Analysis Laboratory (SAL)~\cite{SAL}. SAL contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{cal}.
 
