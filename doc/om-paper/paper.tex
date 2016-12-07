@@ -12,6 +12,7 @@
 \usepackage{amsfonts}
 \usepackage{bm}
 \usepackage{multirow}
+\usepackage{multicol}
 
 \usepackage{tikz}
 \usetikzlibrary{arrows,automata}
@@ -283,21 +284,24 @@ The hybrid fault model assumes a broadcast model of communication.
 A $broadcast: \Id \rightarrow 2^{\Id} \rightarrow \mathbb{R} \rightarrow \Msg \rightarrow 2^{E}$ takes a sender, a set of receivers, a real-time, and a message to send each receiver, and returns a set of calendar events:
 $$broadcast(i, R, t, m) = \{m | j \in R \textnormal{ and } send(i, j, t) = m\}$$
 
-With this machinery, we can define the semantics of faults by constraining the relationship between a message broadcast and the values received by the recipients. For a nonfaulty process that broadcasts, every recipient receives the sent message.
+With this machinery, we can define the semantics of faults by constraining the relationship between a message broadcast and the values received by the recipients. For a nonfaulty process that broadcasts, every recipient receives the sent message, and for symmetric faults, there is no requirement that the messages sent are the ones received, only that every recipient receives the same value:
+\noindent
+\begin{multicols}{2}
 \begin{align*}
 &nonfaulty\_constraint =\\
   &\quad \forall i, j \in \Id, t \in \mathbb{R}.\\
   &\quad\quad faults(i) = none\\
   &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = send(i, j, t)
-\end{align*}
+\end{align*}\break
 \noindent
-For symmetric faults, there is no requirement that the messages sent are the ones received, only that every recipient receives the same value.
 \begin{align*}
 &sym\_constraint =\\
   &\quad \forall i, j, k \in \Id, t \in \mathbb{R}.\\
-  &\quad\quad (faults(i) = sym \textnormal{ and } broadcast(i, \{j, k\}, t, m))\\
-  &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = recv(i, k, t)
+  &\quad\quad\quad (\phantom{\textnormal{and }} faults(i) = sym\\
+  &\quad\quad\quad \phantom{(}\textnormal{and } broadcast(i, \{j, k\}, t, m))\\
+  &\quad\quad \textnormal{ implies } recv(i, j, t) = recv(i, k, t)
 \end{align*}
+\end{multicols}
 \noindent
 Byzantine faults are left completely unconstrained.
 
@@ -388,19 +392,21 @@ The algorithm is recursively defined:
 \noindent
 In particular, $\OMH(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
 
-$\OMH$ is designed to ensure \emph{validity} and \emph{agreement} properties under suitable hypotheses on the number and type of faults in the system. Validity states that if the general is nonfaulty, then every lieutenant outputs the value sent by the general. More formally, let the general broadcast $v \neq \ERR$, and let $l_i$ denote the output for lieutenant $i$:
-%
+$\OMH$ is designed to ensure \emph{validity} and \emph{agreement} properties under suitable hypotheses on the number and type of faults in the system. Validity states that if the general is nonfaulty, then every lieutenant outputs the value sent by the general. Agreement states that each lieutenant outputs the same value. More formally, Let $l_i, l_j$ denote the outputs of lieutenants $i, j \in L$, respectively, and let $v$ be the value the general broadcasts:
+\noindent
+\begin{multicols}{2}
 \begin{equation}
   \tag{Validity}
-    \forall \,i. \quad l_i = v
-\end{equation}
-%
-Agreement states that each lieutenant outputs the same value. Let $l_i, l_j$ denote the outputs of lieutenants $i, j \in L$, respectively:
-%
+    \forall \,i. \quad v \neq \ERR \Rightarrow l_i = v
+\end{equation}\break
 \begin{equation}
   \tag{Agreement}
     \forall \,i, j. \quad l_i = l_j
 \end{equation}
+\end{multicols}
+%
+
+%
 %
 
 We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that fault model, agreement and validity hold if $2a+2s+b+1 \geq n$, where $n$ is the total number of nodes, $a$ is the number of Byzantine (or asymmetric) faults, $s$ is the number of symmetric faults, and $b$ is the number of benign faults. Additionally, it is required that the number of rounds $m$ be greater or equal to the number of Byzantine faults, $a$~\cite{csl-93-2,hybrid}.
@@ -408,7 +414,7 @@ We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that faul
 
 \subsection{Model Sketch}\label{sec:sketch}
 
-We have implemented $\OMH(1)$ (as well as the variants, described in Section~\ref{sec:modular}) in Symbolic Analysis Laboratory (SAL)~\cite{SAL}. SAL contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{Moura_boundedmodel,Armando-et-al}.
+We have implemented $\OMH(1)$ (as well as the variants, described in Section~\ref{sec:modular}) in Symbolic Analysis Laboratory (SAL)~\cite{SAL}. SAL contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{}.
 
 We follow Rushby~\cite{Rushby:OM1} in ``unrolling'' the communication among lieutenants into two sets of logical nodes: \emph{relays} and \emph{receivers}. Relays \lee{finish}
 
