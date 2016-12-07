@@ -305,23 +305,24 @@ Thus, faults can be modeled solely in terms of their effects on sending and rece
 
 \paragraph{Transient faults.} If the $faults$ mapping is a constant, then faults are permanently but nondeterministically assigned to nodes. However, we can easily model \emph{transient faults}~\cite{} in which nodes are faulty temporarily by making $faults$ a state variable that is updated nondeterministically. Whether we model permanent or transient faults, a \emph{maximum fault assumption} (MFA) describes the maximum number of faults permitted in the system. The $faults$ mapping can be nondeterministically updated during execution while satisfying the MFA using a constraint such as $faults \in \{f \, | \, mfa(f) \}$, where the MFA is defined by $mfa()$.
 
-% ------------------------------------------------------------
-\subsection{Abstract State Machines Observers}\label{sec:abstract}\label{sec:asms}
+
+\subsection{Proof by Abstraction}\label{sec:abstract}\label{sec:asms}
 \lee{These are really observers. Let's call them abstract state machine observers and add a bit of the synchronous observers text here. Also, cite disjunctive invariants paper?}
 
-In model-checking, counterexamples to properties are traces of states. A single state includes assignments to each of the variables, and the counterexample traces we examine (see Section~\ref{sec:experimental}) can contain hundreds of state variables. In practice, the essence of a counterexample depends on a small subset of these. The user has to manually separate the state variables that matter from those that do not for a specific property. Moreover, It is not enough to prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when formal models have sufficient detail for implementation synthesis, as is the goal in our work.
-
+In model-checking, counterexamples to properties are traces of states. A state is an assignment to each of the system variables and the counterexample traces we examine (see Section~\ref{sec:experimental}) can contain hundreds of system  variables. In practice however, the essence of a counterexample depends on a small subset of these. The user has to manually separate the state variables that matter from those that do not for a specific property. Moreover, It is not enough to prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when formal models have sufficient detail for implementation synthesis, as is the goal in our work.
 
 %% Systems are usually designed in modes such that predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
 
-But the relationship between many of the state variables often has an intuitive structure, one familiar to the designer, that can be characterized by a state machine imposed over it. The state machine describes discrete modes or configurations. Each mode captures a relation on a subset of the state variables, as well as the set of possible modes that follow.
+But the relationship between many of the state variables often has an intuitive structure, one familiar to the designer, that can be characterized by an auxiliary state machine imposed over it. The state space of this auxiliary machine comprises discrete modes or configurations of the real system. Each mode captures a relation on a subset of the state variables, as well as the set of possible modes that follow.
 
-This idea is an implementation of abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize state machines to operate over arbitrary data structures~\cite{asm}. In our context, we require only a restricted form of ASMs known as a \emph{sequential small-step ASM}:
+\cite{timed-systems}
+\cite{Rushby00:CAV}
 
-\begin{definition}[Abstract state machine (ASM)]
+% This idea is an implementation of abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize state machines to operate over arbitrary data structures~\cite{asm}. In our modeling framework we take the ASM idea and turn it into both and auxiliary state machine and an observer of the real system as follows.
 
-\lee{Ben will redo. I'd just remove the Gurevich reference}
-\ben{I still need to do this!}
+% In our context, we require only a restricted form of ASMs known as a \emph{sequential small-step ASM}:
+
+\begin{definition}[Abstract state machine observer (ASMO)]
 
 Let $\mathcal{M} = (S, I, \rightarrow)$ be a transition system and let $B \subseteq 2^S$ be a set of predicates over $S$. Then $\mathcal{M}$ is an ASM iff the transition relation $\rightarrow$ is of the form
 $$\textnormal{if } b_0(s_0) \textnormal{ then } s'_0 \textnormal{ else if } b_1(s_1) \textnormal{ then } s'_1 \ldots \textnormal{ else } b_n(s_n) \textnormal{ then } s'_n$$
