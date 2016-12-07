@@ -47,12 +47,10 @@
   \usepackage[inline]{showlabels} %
 }
 
-
 \begin{document}
 
 \title{Modular Model-Checking for Fault-Tolerant Distributed System Implementations}
 
-%\author{Benjamin F Jones and Lee Pike}
 \author{Benjamin F Jones\inst{1} \and Lee Pike\inst{2}}
 
 \institute{Galois, Inc., Portland OR 97204,\\
@@ -61,10 +59,7 @@
 Galois, Inc., Portland OR 97204,\\
 \email{leepike@galois.com}}
 
-
-
 \maketitle
-
 
 \begin{abstract}
 With proof techniques like IC3 and $k$-induction, model-checking scales further
@@ -326,6 +321,7 @@ This idea is an implementation of abstract state machines (ASMs). ASMs are a gen
 \begin{definition}[Abstract state machine (ASM)]
 
 \lee{Ben will redo. I'd just remove the Gurevich reference}
+\ben{I still need to do this!}
 
 Let $\mathcal{M} = (S, I, \rightarrow)$ be a transition system and let $B \subseteq 2^S$ be a set of predicates over $S$. Then $\mathcal{M}$ is an ASM iff the transition relation $\rightarrow$ is of the form
 $$\textnormal{if } b_0(s_0) \textnormal{ then } s'_0 \textnormal{ else if } b_1(s_1) \textnormal{ then } s'_1 \ldots \textnormal{ else } b_n(s_n) \textnormal{ then } s'_n$$
@@ -337,36 +333,34 @@ where $b_0, b_1, \ldots, b_n$ are arbitrary Boolean combinations of the predicat
 
 Our use of ASMs to improve traceability is even more restrictive. We construct an ASM $\mathcal{M}$ that is synchronously composed with the system specification $\mathcal{S}$. Each state of the ASM represents a ``configurations'' of $S$ and is associated with some predicate over the states of $\mathcal{S}$.
 
-\begin{example}
-Consider a simple distributed system involving 3 processors: $S$, $L_1$, and $L_2$. The purpose of the system is for $S$ to broadcast a message to $L_1$ and $L_2$ after which they perform a computation on the message and update their local state with the result. One might model this system as a transition system whose state is the product of the local processor states along with the state of the environment and any globally important phenomena such as time.
-
-\begin{figure}
-\centering
-\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=3cm,
-  thick,main node/.style={circle,fill=blue!20,draw,
-  font=\sffamily\Large\bfseries,minimum size=8mm}]
-
-  \node[main node] (S) at (0,0) {$S$};
-  \node[main node] (L1) at (2,1) {$L_1$};
-  \node[main node] (L2) at (2,-1) {$L_2$};
-
-  \path[every node/.style={font=\sffamily\small,
-          fill=white,inner sep=1pt}]
-    (S)  edge (L1)
-         edge (L2);
-
-\end{tikzpicture}
-\label{fig:exa-trans}
-\caption{Simple message passing system}
-\end{figure}
+% \begin{example}
+% Consider a simple distributed system involving 3 processors: $S$, $L_1$, and $L_2$. The purpose of the system is for $S$ to broadcast a message to $L_1$ and $L_2$ after which they perform a computation on the message and update their local state with the result. One might model this system as a transition system whose state is the product of the local processor states along with the state of the environment and any globally important phenomena such as time.
+% 
+% \begin{figure}
+% \centering
+% \begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=3cm,
+%   thick,main node/.style={circle,fill=blue!20,draw,
+%   font=\sffamily\Large\bfseries,minimum size=8mm}]
+% 
+%   \node[main node] (S) at (0,0) {$S$};
+%   \node[main node] (L1) at (2,1) {$L_1$};
+%   \node[main node] (L2) at (2,-1) {$L_2$};
+% 
+%   \path[every node/.style={font=\sffamily\small,
+%           fill=white,inner sep=1pt}]
+%     (S)  edge (L1)
+%          edge (L2);
+% 
+% \end{tikzpicture}
+% \label{fig:exa-trans}
+% \caption{Simple message passing system}
+% \end{figure}
 
 Intuitively, there are subsets of the overall state space which are important to understanding the evolution of such a system. For example, let $A_1$ denote the subset of states in which the processor $S$ has not sent a message, let $A_2$ be the subset in which $S$ has broadcast a message, and let $A_3$ be the subset in which $L_1$ and $L_2$ have each received and processed the message. The union $A_1 \cup A_2 \cup A_3$ covers the set of reachable states of the system and defines an ASM that is useful for reasoning about its dynamics and understanding counter-example traces.
-\end{example}
+
+% \end{example}
 
 
-% ------------------------------------------------------------
-
-% ------------------------------------------------------------
 \section{Putting it Together: Compositional Modeling and Verification for Oral Messages}\label{sec:byz}
 
 To demonstrate the model and techniques, we model an implementation of the Oral Messages Hybrid ($\OMH$) algorithm~\cite{csl-93-2}, a more sophisticated version of the classic Oral Messages ($\OM$) algorithm. $\OM$ was first formulated by Lamport, Shostak, and Pease~\cite{om} to achieve agreement in a distributed system while tolerating Byzantine faults. $\OMH$ was originally developed by Thambidurai and Park~\cite{hybrid} to achieve the same result in the presence of a more sophisticated fault model that includes symmetric and benign faults. However, $\OMH$ had a bug, as originally formulated, which was corrected and the mended algorithm was formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{csl-93-2}.
