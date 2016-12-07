@@ -376,12 +376,12 @@ $\OMH$ is a recursive algorithm that proceeds in rounds of communication. Here w
 The algorithm is recursively defined:
 
 \begin{itemize}
-\item {\bf $\OM(0)$}: $g$ broadcasts a value to each lieutenant, and the lieutenants return the value received (or $\ERR$).
-\item {\bf $\OM(m)$, $m > 0$}:
+\item {\bf $\OMH(0)$}: $g$ broadcasts a value to each lieutenant, and the lieutenants return the value received (or $\ERR$).
+\item {\bf $\OMH(m)$, $m > 0$}:
   \begin{enumerate}
   \item $g$ broadcasts a value to each lieutenant, $l$.
   \item\label{om:two} Let $l_v$ be the value received by $l \in L$ from $g$. Then for each $l$, execute $\OMH(m-1)$, assigning $l$ to be the general and $L \setminus \{l\}$ to be the lieutenants. $l$ sends $l_v$ or $R$, if $l_v = \ERR$.
-  \item For each lieutenant $l \in L$, remove all $\ERR$ values received in Step~\ref{om:two} from executing $OHM(m-1)$. Compute the majority value over the remaining values, or $V$ if there is no majority. If the majority value is $R$, return $E$.
+  \item For each lieutenant $l \in L$, remove all $\ERR$ values received in Step~\ref{om:two} from executing $\OMH(m-1)$. Compute the majority value over the remaining values, or $V$ if there is no majority. If the majority value is $R$, return $E$.
   \end{enumerate}
 \end{itemize}
 
@@ -408,9 +408,11 @@ We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that faul
 
 \subsection{Model Sketch}\label{sec:sketch}
 
-We have implemented $\OMH(1)$ (as well as many variants, described in Section~\ref{sec:modular}) in the Symbolic Analysis Laboratory~\cite{SAL} (SAL) language. The verification is also carried out in SAL, which contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{Moura_boundedmodel,Armando-et-al}.
+We have implemented $\OMH(1)$ (as well as the variants, described in Section~\ref{sec:modular}) in Symbolic Analysis Laboratory (SAL)~\cite{SAL}. SAL contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{Moura_boundedmodel,Armando-et-al}.
 
-We have chosen to follow Rushby~\cite{Rushby:OM1} in ``unrolling'' the communication among lieutenants into two sets of logical nodes: relays and receivers. A special node called the source takes the place of the general above. Thus, for example, in the case where 4 nodes execute $\OMH(1)$, our model consists of one source, three relays, and three receivers. We model communication through one-way, typed channels. The source broadcasts a message to each relay which, in turn, each broadcast their messages to all receivers.
+We follow Rushby~\cite{Rushby:OM1} in ``unrolling'' the communication among lieutenants into two sets of logical nodes: \emph{relays} and \emph{receivers}. Relays \lee{finish}
+
+We refer to the general as the \emph{source}. Thus, for example, in the case where four nodes execute $\OMH(1)$, our model consists of one source, three relays, and three receivers. We model communication through one-way, typed channels. The source broadcasts a message to each relay which, in turn, each broadcast their messages to all receivers.
 
 Our SAL model defines 7 transition systems in total: \texttt{clock}, {\texttt{source}, \texttt{relay} (parametrized over an ID), \texttt{receiver} (parametrized over an ID), \texttt{abstractor}, \texttt{observer}, \texttt{abstract\_monitor}. The first four of these are composed asynchronously, in an intermediate system we label \texttt{system}, and share access to a global calendar consisting of event slots $(\text{message}, \text{time})$, one for each channel in the system. \texttt{clock} is responsible for updating a global variable \texttt{t} representing time according to the rules in Section~\ref{sec:calendar}. The asynchronous composition gives us a relaxed form of the original specification, but it is possible without much additional work to enforce timing constraints, see Section~\ref{sec:modular} "Time-Triggered Messaging". The remaining three systems are observers of the previously defined asynchronous system. The \texttt{observer} controls the state of \texttt{validity} and \texttt{agreement} variables, setting them to \texttt{FALSE} if, when the receivers have computed their vote, the properties do not hold. The \texttt{abstractor} and \texttt{abstract\_monitor} monitor the state of \texttt{system} and update the values of a collection of 6 abstract state predicates. These predicates express different increasing levels of progress of \texttt{system}: from the source sending its message, to the relays broadcasting, to the receivers voting on received values.
 
