@@ -33,8 +33,8 @@
 %% \newtheorem{lemma}{Lemma}
 
 \newboolean{submission}  %set to true for the submission version
-%\setboolean{submission}{false}
-\setboolean{submission}{true}
+\setboolean{submission}{false}
+%\setboolean{submission}{true}
 \ifthenelse
 {\boolean{submission}}
 { %
@@ -73,12 +73,9 @@ ad-hoc abstractions of faults, message-passing, and behaviors.  However, these
 abstractions come at the price of divorcing the model from its implementation
 and making refactoring difficult. In this work, we present a framework for
 fault-tolerant distributed system verification that combining ideas from the literature including calendar automata,
-symbolic fault injection, and abstract state machines observers, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being implementation-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require modular changes to the model and proofs.
+symbolic fault injection, and abstract transition systems, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being implementation-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require modular changes to the model and proofs.
 This work is carried out in SAL model-checker.
 \end{abstract}
-
-\lee{grep for synchronous observers section references}
-\lee{grep for ASM vs abstract transition system}
 
 \section{Introduction}
 
@@ -88,16 +85,17 @@ The verification of this class of systems has usually been at the algorithmic le
 
 There are at least two classes of abstractions that separate protocol-level models of fault-tolerant distributed algorithms from their implementations.  One is to intertwine the environmental model with the system description. For example, the behaviors of nodes are naturally specified as a transition system in which transitions are guarded by the node's fault state. But faults are part of the environment; an implementation does not typically use its own fault status to choose actions! Another class of abstractions is used to simplify models.  For example, message passing might be abstracted with shared state, or a node's local behavior is elided and instead, the output is constrained by a \emph{specification} of the behavior.
 
-In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify several variant implementations of the Byzantine fault-tolerant Hybrid Oral Messages algorithm (\OMH)~\cite{Lincoln-Rushby}. The framework combines ideas from the literature and folklore to build scalable and modular formal models suitable for infinite-state model-checking, and it reduces the need for ad-hoc abstractions and optimizations while maintaining scalability. In Section~\ref{sec:model}, we present the important aspects of the framework, including calendar automata, originally developed by Dutertre and Sorea~\cite{cal}, symbolic fault-injection, and abstract state machines for verification.
+In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify several variant implementations of the Byzantine fault-tolerant Hybrid Oral Messages algorithm (\OMH)~\cite{Lincoln-Rushby}. The framework combines ideas from the literature and folklore to build scalable and modular formal models suitable for infinite-state model-checking, and it reduces the need for ad-hoc abstractions and optimizations while maintaining scalability. In Section~\ref{sec:model}, we present the important aspects of the framework, including calendar automata, originally developed by Dutertre and Sorea~\cite{cal}, symbolic fault-injection, and abstract transition systems for verification.
 
  %% There are three aspects of the framework: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) symbolic fault injection for decomposing the effects of faults from the system specification, and (3) \emph{abstract state machines observers}, useful for abstracting counterexamples. The framework is suitable for infinite-state model-checking supported by satisfiability modulo theories (SMT).
 
-We use the framework to verify implementation-level models of \OMH in which message passing is explicit, nodes are not enforced to execute strictly synchronously, and voting is explicit. In short, the models corresponds closely with an implementation of the algorithm. In Section~\ref{sec:byz}, we first describe \OMH, then an implementation of it that uses the Boyer-Moore Fast Majority Vote algorithm~\cite{mjrty}. We then describe a set of modular invariants, such that the invariants only concern specific aspects of the model (e.g., faults, local node behavior, or the passage of time). The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
+We use the framework to verify implementation-level models of \OMH in which message passing is explicit, nodes are not enforced to execute strictly synchronously, and voting is explicit. In short, the models corresponds closely with an implementation of the algorithm. In Section~\ref{sec:byz}, we first describe \OMH, then an implementation of it that uses the Boyer-Moore Fast Majority Vote algorithm (Fast~MJRT)~\cite{mjrty}. We then describe a set of modular invariants, such that the invariants only concern specific aspects of the model (e.g., faults, local node behavior, or the passage of time). The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
 
 In Section~\ref{sec:experimental}, we first show that despite being implementation-level, the model is scalable. Developing invariants requires some user guidance, and isolated changes to an implementation should require isolated modifications to the model and proof. To demonstrate this, we modify the \OMH implementation along the dimensions of faults (by adding an omissive-asymetric fault type~\cite{omissive}), time (by making a time-triggered model), and local behavior (by changing the majority vote to a mid-value selection) and show that in each case, the modifications are small and modular.
 
 Finally, in Section~\ref{sec:related} we describe related work, and we make concluding remarks in Section~\ref{sec:conclusions}.
 
+The models and experiments reported herein can be found at \url{https://github.com/GaloisInc/mmc-paper}.
 
 %% To address this problem, we envision building a domain-specific language (DSL) for specifying and exploring distributed fault-tolerant system implementations. We envision a DSL that generates both code for simulation, testing, and deployment, as well as formal models for verification. That way, the formal models verified and code executed stay in sync, and abstractions are systematically made. We say more about the DSL in Section~\ref{sec:conclusions}.
 
@@ -110,7 +108,7 @@ Finally, in Section~\ref{sec:related} we describe related work, and we make conc
 
 % ------------------------------------------------------------
 \section{Formal Framework}\label{sec:model}
-Here we describe our formal framework specialized for fault-tolerant distributed systems. The framework draws on three principal abstractions: calendar automata, symbolic fault injection, and abstract state machines observers; we describe each below.
+Here we describe our formal framework specialized for fault-tolerant distributed systems. The framework draws on three principal abstractions: calendar automata, symbolic fault injection, and abstract transition sytems; we describe each below.
 
 \subsection{Calendar Automata}\label{sec:calendar}
 %% \emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{alur}. Timed automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks}. Model-checkers for timed-automata are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks.
@@ -176,13 +174,12 @@ In the absence of faults, we require that messages received were previously sent
 
 Then an event calendar for sending and receiving messages on channels is the union of the $send$ and $recv$ relations.
 
-The event of receiving a message initiates a process to update its local state machine and generate additional messages to send. When the process is updating its local state machine, the event calendar is paused. That is, updating an event $recv(i, j, t, m)$ also includes updating $j$'s state machine.
+The event of receiving a message initiates a process to update its local transition system and generate additional messages to send. When the process is updating its local transition system, the event calendar is paused. That is, updating an event $recv(i, j, t, m)$ also includes updating $j$'s transition system.
 
 In specifying a system, a \emph{clock} module is synchronously composed (under SAL semantics for synchronous composition~\cite{SAL}) with the system. The clock module updates time to the next calendar event, and stutters otherwise.
 
 %% \subsection{Synchronous Observers and }\label{sec:sync}
 
-\lee{Cutting synchronous observer section; need to talk about use for lemmas elsewhere.}
 
 %% Synchronous observers are state machines that are synchronously composed with a system specification to check properties over the system's state variables, i.e. they are a method for composing specifications with a program. Synchronous observers were first introduced in the context of the synchronous programming languages, such as Lustre~\cite{lustre:ieee}. While synchronous observers have been part of model-checking folklore for some time, Rushby systematically describes their application to the present domain in~\cite{Rushby:SAS14}. In Section~\ref{sec:sync-model} we define synchronous observers and then describe their application to modeling faults in Section~\ref{sec:kibitzer}.
 
@@ -434,19 +431,19 @@ We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that faul
 
 \subsection{Model Sketch}\label{sec:sketch}
 
-\lee{we need to mention MJRTY here or in the modular verifiation section}
-
 We have implemented $\OMH(1)$ (as well as the variants described in Section~\ref{sec:modular}) in the Symbolic Analysis Laboratory (SAL)~\cite{SAL}. SAL contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{cal}.
 
 We follow Rushby~\cite{Rushby:OM1} in ``unrolling'' the communication among lieutenants into two sets of logical nodes: \emph{relays} and \emph{receivers}. Relays encode the lieutenants' Step~\ref{om:two} of the \OMH algorithm, in which they rebroadcast the values received from the general after filtering manifestly bad messages, while the receivers encode the voting step. We refer to the general as the \emph{source}. The unrolling shows that a generalization of the original algorithm holds: the number of relays and receivers need not be the same. We model communication through one-way, typed channels. The source broadcasts a message to each relay which, in turn, each broadcast their messages to all receivers.
+
+The relays and receivers explicitly send and receive messages and store them in local buffers as needed. In addition, the receivers implement the Fast~MJRY algorithm~\cite{mjrty}.
 
 Our SAL model defines seven transition systems in total: \texttt{clock}, {\texttt{source}, \texttt{relay} (parametrized over an ID), \texttt{receiver} (parametrized over an ID), \texttt{observer}, \texttt{abstractor}, and \texttt{abstract\_monitor}. The first four of these are composed asynchronously, in an intermediate system we label \texttt{system}, and share access to a global calendar consisting of event slots $(\text{message}, \text{time})$, one for each channel in the system. The \texttt{clock} transition system is responsible for updating a global variable \texttt{t} representing time according to the rules in Section~\ref{sec:calendar}.
 
 The asynchronous composition of the system relaxes the original specification of the algorithm considerably. For example, in our implementation, a receiver may receive a message from one relay before another relay has received a message from the source. We only require that all relays and receivers have executed before voting. With a general asynchronous model, it is easy to refine it further; for example, we refine it to a time-triggered model in Section~\ref{sec:modular}.
 
-The \texttt{observer} is a synchronous observer~\cite{Rushby:SAS14} that encodes the validity and agreement properties as state machines. State variables denoting validity and agreement are set to be false if the receivers have completed their vote but the respective properties do not hold.
+The \texttt{observer} is a synchronous observer~\cite{Rushby:SAS14} that encodes the validity and agreement properties as synchronously-composed transition systems. State variables denoting validity and agreement are set to be false if the receivers have completed their vote but the respective properties do not hold.
 
-Finally, the \texttt{abstractor} and \texttt{abstract\_monitor} encode an abstract state machine observer for the system, as described in Section~\ref{sec:abstract}.
+Finally, the \texttt{abstractor} and \texttt{abstract\_monitor} encode an abstract transition system for the system, as described in Section~\ref{sec:abstract}.
 
 %% controls the state of \texttt{validity} and \texttt{agreement} variables, setting them to \texttt{FALSE} if, when the receivers have computed their vote, the properties do not hold. The \texttt{abstractor} and \texttt{abstract\_monitor} monitor the state of \texttt{system} and update the values of a collection of 6 abstract state predicates. These predicates express different increasing levels of progress of \texttt{system}: from the source sending its message, to the relays broadcasting, to the receivers voting on received values.
 
@@ -485,9 +482,9 @@ Finally, the \texttt{abstractor} and \texttt{abstract\_monitor} encode an abstra
     \tikzstyle{every state}=[rectangle, rounded corners]
 
     \node[state] (calendar) {calendar (1)};
-    \node[state] (lieutenant) [right=1.75cm of calendar] {\begin{tabular}{c}lieutenant\\state-machine (2)\end{tabular}};
+    \node[state] (lieutenant) [right=1.75cm of calendar] {\begin{tabular}{c}receiver\\local behavior (2)\end{tabular}};
     \node[state] (faults) [below=0.5cm of calendar] {faults (5)};
-    \node[state] (asm) [right=0.5cm of faults] {ASM (1)};
+    \node[state] (asm) [right=0.5cm of faults] {ATS (1)};
     \node[state] (voting) [below=0.5cm of lieutenant] {voting (2)};
 
     \tikzstyle{every node}=[]
@@ -505,14 +502,14 @@ Finally, the \texttt{abstractor} and \texttt{abstract\_monitor} encode an abstra
 
 To make the proof scalable, we specify inductive invariants to be used by SAL's $k$-induction engine. There are 11 invariants, falling into five categories:
 \begin{enumerate}
-  \item \emph{Calendar automata}: Lemmas relating to the calendar automata model. These include lemmas such as time being monotonic, channels missing messages if there is no calendar event, and only nodes associated with a calendar event may execute their local state machines.
-  \item \emph{Abstract state machine (ASM)}: Lemmas relating the ASM synchronous observer states to the implementation states.
-  \item \emph{Receiver local behavior}: Lemmas describing the modes of behavior of the receivers. The major modes of the state machine are receiving messages, then once it has filled its buffer, it votes, and after voting returns the result. One additional lemma notes that the messages currently received plus missing messages equals the total number of expected messages.
+  \item \emph{Calendar automata}: Lemmas relating to the calendar automata model. These include lemmas such as time being monotonic, channels missing messages if there is no calendar event, and only nodes associated with a calendar event may execute their local transition systems.
+  \item \emph{Abstract transition sytem (ATS)}: Lemmas relating the ATS states to the implementation states.
+  \item \emph{Receiver local behavior}: Lemmas describing the modes of behavior of the receivers. The major modes of their behavior are receiving messages, then once it has filled its buffer, it votes, and after voting returns the result. An additional lemma notes that the messages currently received plus missing messages equals the total number of expected messages.
   \item \emph{Faults}: Lemmas characterizing the effect of a fault in a single broadcast. Examples include lemmas stating that if a node receives a faulty message, some ``upstream'' node in the communication path was faulty. Another example is that the faults of messages latched by a node in its buffer match the faults ascribed to the sender in the calendar event.
-  \item \emph{Voting}: Lemmas proving that the Fast Majority Vote algorithm implements a majority vote, if one exists. These lemmas are nearly verbatim transcriptions from the journal proofs~\cite{mjrty}.
+  \item \emph{Voting}: Lemmas proving that the Fast~MJRTY algorithm implements a majority vote, if one exists. These lemmas are nearly verbatim transcriptions from the journal proofs for the algorithm~\cite{mjrty}.
 \end{enumerate}
 \noindent
-The proof structure is shown in Figure~\ref{fig:proof}. The number of lemmas per category are shown in parentheses. Arrows denote dependencies. For example, the ASM lemmas depend on both the calendar automata and receiver state-machine lemmas. As can be seen, the proof structure is modular. The calendar lemmas are general and independent of any particular protocol or fault model. Similarly, lemmas about the internal behavior of a receiver is independent of the global protocol behavior. It is also independent of the effect of faults on the system---the only ``knowledge'' of faults that receiver has is whether a fault is benign or not. Lemmas about the behavior of faults in the system are also independent of the particular protocol being modeled. Likewise, lemmas about the particular voting algorithm used depend only on the receiver's internal behavior. Only the ASM depends on both calendar-specific and local state-machine results, since it is an abstraction of the entire system implementation. Recall, however, that the ASM is a convenience for debugging and can be elided.
+The proof structure is shown in Figure~\ref{fig:proof}. The number of lemmas per category are shown in parentheses. Arrows denote dependencies. For example, the ATS lemmas depend on both the calendar automata and receiver state-machine lemmas. As can be seen, the proof structure is modular. The calendar lemmas are general and independent of any particular protocol or fault model. Similarly, lemmas about the internal behavior of a receiver is independent of the global protocol behavior. It is also independent of the effect of faults on the system---the only ``knowledge'' of faults that receiver has is whether a fault is benign or not. Lemmas about the behavior of faults in the system are also independent of the particular protocol being modeled. Likewise, lemmas about the particular voting algorithm used depend only on the receiver's internal behavior. Only the ATS depends on both calendar-specific and local state-machine results, since it is an abstraction of the entire system implementation. Recall, however, that the ATS is a convenience for debugging and can be elided.
 
 % ------------------------------------------------------------
 \section{Experimental Results}\label{sec:experimental}
@@ -576,13 +573,13 @@ As a point of comparison, Rushby presents an elegant model of the simpler \OM{m}
   \hline
                                   & Transition systems\linebreak (7 total)  &Definitions\linebreak (58 total) & Invariants\linebreak (11 total) & Invariant classes\linebreak (5 total) \\
   \hline \hline
-  %% No Fault Model                  & receivers & 8 modified & 2 modified & ASM, faults \\
+  %% No Fault Model                  & receivers & 8 modified & 2 modified & ATS, faults \\
   %% \hline
   Omissive Asymmetric Faults       & none      & 1 new, 2 modified & 2 modified & faults             \\
   \hline
-  Time-Triggered Messaging        & source, relays, receivers, ASM & 3 new & 2 modified, 3 modified & calendar, faults \\
+  Time-Triggered Messaging        & source, relays, receivers, ATS & 3 new & 2 modified, 3 modified & calendar, faults \\
   \hline
-  Mid-Value Selection & receivers & 4 new, 3 modified & 2 modified & ASM, voting \\
+  Mid-Value Selection & receivers & 4 new, 3 modified & 2 modified & ATS, voting \\
   \hline
   \end{tabular}
   \caption{Refactoring effort for protocol modifications, measured by which portions of the model have to be modified.}
@@ -599,15 +596,15 @@ Adding new kinds of faults requires more work but is still modular. Consider add
 \paragraph{Time-Triggered Messaging.}
 A \emph{time-triggered} distributed system is one in which nodes are independently clocked, but clock constraints allow the model to appear as if it is executing synchronously~\cite{kopetz}.
 
-Changing the model to be time-triggered principally requires making the source, relays, and receivers driven explicitly by the passage of time. As well, a ``receive window'' is defined at which messages from non-faulty nodes should be received. Messages received outside the window are marked as coming from manifest-faulty senders. To implement a time-triggered model, we create three definitions; one encodes nondeterministic message delay, and two are small helpers called by invariants. The guards in the relays and receivers are modified to latch messages received outside the specified windows as being manifest faults. Additionally, the ASM definition is modified to track the times in the calendar, not just the messages. Two new calendar invariants are introduced, stating that the calendar messages are either empty, or their time-stamps fall within the respective message windows. Then, three invariants classifying faults are relaxed to allow for the possibility of faulty nodes sending benign messages.
+Changing the model to be time-triggered principally requires making the source, relays, and receivers driven explicitly by the passage of time. As well, a ``receive window'' is defined at which messages from non-faulty nodes should be received. Messages received outside the window are marked as coming from manifest-faulty senders. To implement a time-triggered model, we create three definitions; one encodes nondeterministic message delay, and two are small helpers called by invariants. The guards in the relays and receivers are modified to latch messages received outside the specified windows as being manifest faults. Additionally, the ATS definition is modified to track the times in the calendar, not just the messages. Two new calendar invariants are introduced, stating that the calendar messages are either empty, or their time-stamps fall within the respective message windows. Then, three invariants classifying faults are relaxed to allow for the possibility of faulty nodes sending benign messages.
 
 \paragraph{Mid-Value Selection.}
-Our $\OMH(1)$ model leverages a majority vote in order to tolerate faults. Another choice for the fault masking algorithm used is mid-value selection. This choice is common in applications involving hardware, signal selection, or cases where information about congruence is useful. To implement mid-value selection in our model, we allow messages sent to take values in $\mathbb{R}$ and the receiver transition system is modified in two ways. First, a second buffer is introduced which will hold the sorted contents of the main buffer once voting has commenced. Second, a mid-value select function is called on the sorted buffer and the result is stored as the receiver's vote. The only invariants needing modification were the ASM definition (to account for the values stored by the new buffer and the relation between it and the main buffer) and the voting invariant.
+Our $\OMH(1)$ model leverages a majority vote in order to tolerate faults. Another choice for the fault masking algorithm used is mid-value selection. This choice is common in applications involving hardware, signal selection, or cases where information about congruence is useful. To implement mid-value selection in our model, we allow messages sent to take values in $\mathbb{R}$ and the receiver transition system is modified in two ways. First, a second buffer is introduced which will hold the sorted contents of the main buffer once voting has commenced. Second, a mid-value select function is called on the sorted buffer and the result is stored as the receiver's vote. The only invariants needing modification were the ATS definition (to account for the values stored by the new buffer and the relation between it and the main buffer) and the voting invariant.
 
 
 \subsection{Proof Effort Remarks}
 
-The lemmas described in Section~\ref{sec:invariants} are constructed by-hand and represent multiple days of effort, but that effort includes both model and protocol construction and generalization as well as verification. The counterexamples returned by SAL are very useful for strengthening invariants, but tedious to analyze---a model with five relays and two receivers contains 90 state variables, and there are known counterexamples to models that size~\cite{Lincoln-Rushby}. Once we developed the ASM synchronously-composed observer, the verification effort was sped up considerably.
+The lemmas described in Section~\ref{sec:invariants} are constructed by-hand and represent multiple days of effort, but that effort includes both model and protocol construction and generalization as well as verification. The counterexamples returned by SAL are very useful for strengthening invariants, but tedious to analyze---a model with five relays and two receivers contains 90 state variables, and there are known counterexamples to models that size~\cite{Lincoln-Rushby}. Once we developed the synchronously-composed ATS observer, the verification effort was sped up considerably.
 
 The invariants and model are surprisingly modular. The modifications we explored took at most hours to develop. Moreover, most of the invariants do not concern the specific protocol modeled at all, and we hypothesize that for completely different protocols, only the modeling aspects related to the protocol behavior and local node behavior would change.
 
@@ -616,26 +613,22 @@ Moreover, we are agnostic about how lemmas are discovered. As techniques like IC
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
 
-The Oral Messages algorithm and its variants and its variants have a long history of formal verification. \OM{1} was verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement \OM{1} is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and \OM{1} is specialized to a four-node system. It appears that a general purpose voting algorithm (like Fast MJRTY) is not verified as part of the work. It is not clear how difficult it would be to model and verify changes to the implementation in that framework.
+The Oral Messages algorithm and its variants and its variants have a long history of formal verification. \OM{1} was verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement \OM{1} is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and \OM{1} is specialized to fixed number of nodes.
 
 Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults, specialized for three or four nodes~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. The model is efficient for up to five nodes, but results are not presented beyond that. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of \OM{1} as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
+
+Our work was heavily influenced by previous verifications of fault-tolerant systems in SAL~\cite{Rushby:OM1,cal,timed-systems}.
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
 This work fits within a larger project, in collaboration with Honeywell Labs, to build an \emph{architectural domain-specific language} (ADSL) for specifying and verifying distributed fault-tolerant systems. The goal of the language is to synthesize both software and/or hardware implementations as well as formal models for verification. Before building such an ADSL, we needed a scalable general formal model to which to compile, leading to the work presented in this paper. We hypothesize that an ADSL will make refactoring even easier, and we can generate invariants or invariant templates useful for verification. Indeed, we have developed a preliminary ADSL that generates C code as well as formal models SRI's Sally~\cite{pdr-kind}, to be described in future work.\footnote{\url{https://github.com/GaloisInc/atom-sally}}
 
-Beyond building an ADSL, another avenue of research is producing a formal proof that a software implementation satisfies the node specification in our framework. While our model of node behavior is low-level, there are gaps. For example, our work is in SAL's language of guarded commands~\cite{SAL} and needs to be either refined or verified to be equivalent to a software implementation's semantics. Another aspect is that behavior related to networking and benign fault diagnosis (e.g., computing a CRC) is are left abstract. In a software implementation, the $send$ and $recv$ functions would have to implement these behaviors.
+Beyond building an ADSL, another avenue of research is producing a formal proof that a software implementation satisfies the node specification in our framework. While our model of node behavior is low-level, there are gaps. For example, our work is in SAL's language of guarded commands~\cite{SAL} and needs to be either refined or verified to be equivalent to a software implementation's semantics. Another aspect is that behavior related to networking and benign fault diagnosis (e.g., computing a CRC) is left abstract. In a software implementation, the $send$ and $recv$ functions would have to implement these behaviors.
 
 
 
  %% A synthesis approach may be suitable and has been used in the past for fault-tolerant clock-synchronization~\cite{ddd}.
 
-
-
-\lee{link to all results in github}
-\lee{talk about compositional verification of properties, even though SAL doesn't directly support it---maybe not so important}
-\lee{talk about k-induction vs. PDR---actually I don't think we have much to say}
-\lee{talk about lack of axiomatization in model-checking (multiple rushby bugs), but  tradeoff of deadlock. see proglema paper}
 
 \section*{Acknowledgments}
 This work is partially supported by NASA contract \#NNL14AA08C. We are indebted to our collaborators Brendan Hall and Srivatsan Varadarajan at Honeywell Labs, and to Wilfredo Torres-Pomales at NASA Langley for their discussions and insights. Additionally, we acknowledge that this work is heavily inspired by a series of papers authored by John Rushby.
