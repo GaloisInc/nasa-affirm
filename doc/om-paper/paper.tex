@@ -4,7 +4,7 @@
 
 \usepackage{ifthen}
 \usepackage{xcolor}
-
+\usepackage{xspace}
 \usepackage{graphicx}
 \usepackage{alltt}
 \usepackage{amsmath}
@@ -19,14 +19,13 @@
 \usepackage{tikz-cd}
 \usetikzlibrary{positioning}
 
-\newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}}
-\newcommand{\OMH}{\ensuremath{\mathrm{OMH}}}
-\newcommand{\Id}{\ensuremath{\mathrm{Id}}}
-\newcommand{\Msg}{\ensuremath{\mathrm{Msg}}}
-\newcommand{\ERR}{\ensuremath{\mathrm{ERR}}}
-\newcommand{\TO}{\ensuremath{\bm{\mathrm{T}}}}
-%\newcommand{\tld}[1]{\overset{\sim}{#1}}
-\newcommand{\tld}[1]{#1_{*}}
+\newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}\xspace}
+\newcommand{\OMH}{\ensuremath{\mathrm{OMH}}\xspace}
+\newcommand{\Id}{\ensuremath{\mathrm{Id}}\xspace}
+\newcommand{\Msg}{\ensuremath{\mathrm{Msg}}\xspace}
+\newcommand{\ERR}{\ensuremath{\mathrm{ERR}}\xspace}
+\newcommand{\TO}{\ensuremath{\bm{\mathrm{T}}}\xspace}
+\newcommand{\tld}[1]{#1_{*}\xspace}
 
 %% IEEE
 %% \newtheorem{definition}{Definition}
@@ -72,14 +71,10 @@ challenging to model-check given their large state space and
 non-determinism. The typical approach to controlling complexity is to construct
 ad-hoc abstractions of faults, message-passing, and behaviors.  However, these
 abstractions come at the price of divorcing the model from its implementation
-and making refactoring difficult. In this work, we present a systematic model for
-fault-tolerant distributed system verification that combines calendar automata,
-symbolic fault injection, and abstract state machines observers specialized for
-infinite-state model-checking. We demonstrate the efficacy of the framework by presenting the
-first model-checked \emph{implementation} of the Hybrid Oral Messages algorithm,
-using a fast majority vote, then demonstrate how modifications along axes such
-as the fault model, timing constraints, and local node behavior require only local modifications
-to the model and proofs. This work is carried out in SAL model-checker.
+and making refactoring difficult. In this work, we present a framework for
+fault-tolerant distributed system verification that combining ideas from the literature including calendar automata,
+symbolic fault injection, and abstract state machines observers, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being low-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require modular changes to the model and proofs.
+This work is carried out in SAL model-checker.
 \end{abstract}
 
 \lee{grep for synchronous observers section references}
@@ -92,13 +87,13 @@ The verification of this class of systems has usually been at the algorithmic le
 
 There are at least two classes of abstractions that separate protocol-level models of fault-tolerant distributed algorithms from their implementations.  One is to intertwine the environmental model with the system description. For example, the behaviors of nodes are naturally specified as a transition system in which transitions are guarded by the node's fault state. But faults are part of the environment; an implementation does not typically use its own fault status to choose actions! Another class of abstractions is used to simplify models.  For example, message passing might be abstracted with shared state, or a node's local behavior is elided and instead, the output is constrained by a \emph{specification} of the behavior.
 
-In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify Oral Messages Hybrid algorithm (\OMH)~\cite{Lincoln-Rushby}
+In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify several implementations of the Byzantine fault-tolerant Hybrid Oral Messages algorithm (\OMH)~\cite{Lincoln-Rushby}. The framework combines ideas from the literature and folklore to build scalable and modular formal models suitable for infinite-state model-checking, and it reduces the need for ad-hoc abstractions and optimizations while maintaining scalability. In Section~\ref{sec:model}, we present the important aspects of the framework, including \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal}, symbolic fault-injection, and abstract state machines for verification~\cite{}.
 
-. We combine ideas from the literature and folklore to build scalable and modular formal models of fault-tolerant distributed systems. We describe a generic formal framework for fault-tolerant distributed systems that aims to reduce the need for ad-hoc verification abstractions and optimizations while maintaining scalability in Section~\ref{sec:model}. There are three aspects of the framework: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) symbolic fault injection for decomposing the effects of faults from the system specification, and (3) \emph{abstract state machines observers}, useful for abstracting counterexamples. The framework is suitable for infinite-state model-checking supported by satisfiability modulo theories (SMT).
+ %% There are three aspects of the framework: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) symbolic fault injection for decomposing the effects of faults from the system specification, and (3) \emph{abstract state machines observers}, useful for abstracting counterexamples. The framework is suitable for infinite-state model-checking supported by satisfiability modulo theories (SMT).
 
-To demonstrate the framework, in Section~\ref{sec:byz} focus on a particular representative algorithm as a case-study. We present a formally-verified implementation of the Oral Messages Hybrid algorithm (\OMH)~\cite{Lincoln-Rushby}, implementing the Boyer-Moore Fast Majority Vote algorithm for voting~\cite{mjrty}. The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
+We use the framework to verify low-level models of \OMH in which message passing is explicit, nodes are not enforced to execute strictly synchronously, and voting is explicit. In short, the models corresponds closely with an implementation of the algorithm. In Section~\ref{sec:byz}, we describe \OMH, an initial implementation model of it using the Boyer-Moore Fast Majority Vote algorithm~\cite{mjrty}, and a class of modular invariants; that is, invariants are grouped in a small set of classes with well-defined relationships. The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
 
-In Section~\ref{sec:experimental}, we give describe two sets of experiments on the model. First, we benchmark the model, showing that despite the additional complexity, it scales farther than other model-checking verifications at the algorithmic level. The scalability is due principally to specifying invariants and using $k$-induction in SRI's SAL model-checker~\cite{SAL}. Developing invariants requires some user guidance. A user should not have to discover all new invariants for new protocols or implementations. We show that most of the lemmas required are not protocol specific and are modular, concerning only specific aspects of the system, such as the timing, faults, or local node behavior. To demonstrate this, we modify the OHM implementation and show that in each case, only a small number of localized modifications are required to repair the model and proofs. The modifications we study are to add omissive-asymetric faults, make the implementation time-triggered, and replace the majority vote with a mid-value selection.
+In Section~\ref{sec:experimental}, we first show that despite being low-level, the model is scalable. Developing invariants requires some user guidance, and isolated changes to an implementation should require isolated modifications to the model and proof. To demonstrate this, we modify the \OMH implementation along the dimensions of faults (by adding an omissive-asymetric fault type~\cite{omissive}), time (by making a time-triggered model), and local behavior (by changing the majority vote to a mid-value selection) and show that in each case, the modifications are small and modular.
 
 Finally, in Section~\ref{sec:related} we describe related work, and we make concluding remarks in Section~\ref{sec:conclusions}.
 
@@ -290,22 +285,29 @@ $$broadcast(i, R, t, m) = \{m | j \in R \textnormal{ and } send(i, j, t) = m\}$$
 
 With this machinery, we can define the semantics of faults by constraining the relationship between a message broadcast and the values received by the recipients. For a nonfaulty process that broadcasts, every recipient receives the sent message, and for symmetric faults, there is no requirement that the messages sent are the ones received, only that every recipient receives the same value:
 \noindent
-\begin{multicols}{2}
-\begin{align*}
+
+\begin{center}
+\begin{tabular}{l|l}
+\begin{minipage}[t]{0.5\linewidth}
+\[\begin{aligned}
 &nonfaulty\_constraint =\\
   &\quad \forall i, j \in \Id, t \in \mathbb{R}.\\
-  &\quad\quad faults(i) = none\\
-  &\quad\quad\quad \textnormal{ implies } recv(i, j, t) = send(i, j, t)
-\end{align*}\break
-\noindent
-\begin{align*}
+  &\quad\quad\quad faults(i) = none\\
+  &\quad\quad \textnormal{ implies } recv(i, j, t) = send(i, j, t)
+\end{aligned}\]
+\end{minipage}&
+\begin{minipage}[t]{0.5\linewidth}
+\[\begin{aligned}
 &sym\_constraint =\\
   &\quad \forall i, j, k \in \Id, t \in \mathbb{R}.\\
   &\quad\quad\quad (\phantom{\textnormal{and }} faults(i) = sym\\
   &\quad\quad\quad \phantom{(}\textnormal{and } broadcast(i, \{j, k\}, t, m))\\
   &\quad\quad \textnormal{ implies } recv(i, j, t) = recv(i, k, t)
-\end{align*}
-\end{multicols}
+\end{aligned}\]
+\end{minipage}
+\end{tabular}
+\end{center}
+
 \noindent
 Byzantine faults are left completely unconstrained.
 
@@ -376,9 +378,9 @@ The use of abstract transition systems not only allows us to scale proofs farthe
 % \end{example}
 
 
-\section{Putting it Together: Compositional Modeling and Verification for Oral Messages}\label{sec:byz}
+\section{Modeling and Verification for Oral Messages}\label{sec:byz}
 
-To demonstrate the model and techniques, we model an implementation of the Oral Messages Hybrid ($\OMH$) algorithm~\cite{Lincoln-Rushby}, a more sophisticated version of the classic Oral Messages ($\OM$) algorithm. $\OM$ was first formulated by Lamport, Shostak, and Pease~\cite{om} to achieve agreement in a distributed system while tolerating Byzantine faults. $\OMH$ was originally developed by Thambidurai and Park~\cite{hybrid} to achieve the same result in the presence of a more sophisticated fault model that includes symmetric and benign faults. However, $\OMH$ had a bug, as originally formulated, which was corrected and the mended algorithm was formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{Lincoln-Rushby}.
+The Hybrid Oral Messages ($\OMH$) algorithm~\cite{Lincoln-Rushby} is a variant of the classic Oral Messages ($\OM$) algorithm~\cite{om}, originally developed by Thambidurai and Park~\cite{hybrid} to achieve distributed consensus in the presence of a hybrid fault model. However, $\OMH$ had a bug, as originally formulated, which was corrected and the mended algorithm was formally verified by Lincoln and Rushby using interactive theorem-proving~\cite{Lincoln-Rushby}.
 
 First, we briefly describe the algorithm, sketch our model of the algorithm within the framework presented in Section~\ref{sec:model}, then describe it's invariants.
 
@@ -424,6 +426,8 @@ We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that faul
 
 
 \subsection{Model Sketch}\label{sec:sketch}
+
+\lee{we need to mention MJRTY here or in the modular verifiation section}
 
 We have implemented $\OMH(1)$ (as well as the variants described in Section~\ref{sec:modular}) in Symbolic Analysis Laboratory (SAL)~\cite{SAL}. SAL contains a suite of model-checkers. In our work, we use infinite-state (SMT-based) $k$-induction~\cite{cal}.
 
@@ -546,7 +550,7 @@ Here we present two classes of experimental results. First, we demonstrate the s
 We present benchmarks in Figure~\ref{fig:benchmark}. The benchmarks were
 performed on a server with Intel Xeon E312xx (Sandy Bridge) CPUs (mid 2011). The table provides execution times in seconds, with a timeout limit of one hour, for verifying the model, given a selected number of relays and receivers. The voting logic is in the receivers, so they have substantially more state than the relays, and dominate the execution time. The execution times sums the execution times for verifying each of the eleven lemmas individually, as well as the final agreement and validity theorems. Each proof incurs the full startup, parsing, type-checking, and model-generation time of SAL. Observe the theorems hold even in the degenerate cases of one relay or one receiver.
 
-As a point of comparison, we also benchmarked Rushby's model~\cite{Rushby:OM1} on the same machine, using the same environment. When the number of receivers was fixed at 2, the verification time for increasing numbers of relays was: $0.12 s$, $0.20 s$, $2.56 s$, $8.24 s$, $28.0 s$, $549 s$, \TO, \TO, \TO (compare to the numbers in the second column of Figure~\ref{fig:benchmark}). Empirical evidence suggests that our verification, while slower for small numbers of nodes, scales much better for larger numbers of nodes.
+As a point of comparison, Rushby presents an elegant model of the simpler \OM algorithm, also in SAL, but using BDD-based model-checking~\cite{Rushby:OM1}. The model is at the algorithmic level. For small values, the verification is much faster, probably due to making only one call to SAL. However, for six relays and two receivers, it takes 449~seconds and timeouts for seven relays and two receivers.
 
 %% For comparison, when the fault model is ``turned off'' by defining the fault
 %% type to contain a single 'nonfaulty' value and removing fault specific lemmas,
@@ -578,7 +582,9 @@ As a point of comparison, we also benchmarked Rushby's model~\cite{Rushby:OM1} o
   \label{fig:effort}
 \end{figure}
 
-To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and report the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{fig:effort} and sketched below. In the table, for each modification, we report how much of the model must be modified. We report on four aspects of the system: which transition systems making up the full model are modified (as described in Section~\ref{sec:model}), how many definitions have to be added or modified, the number of invariants that have to be added or modified, and which invariant classes (as defined in Section~\ref{sec:invariants}) those lemmas belong to.
+To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and report the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{fig:effort} and sketched below. In the table, for each modification, we report how much of the model must be modified. We report on four aspects of the system: which transition systems making up the full model are modified (as described in Section~\ref{sec:model}), how many definitions have to be added or modified, the number of invariants that have to be added or modified, and which invariant classes (as defined in Section~\ref{sec:invariants}) those lemmas belong to. We modify the implementation along the axes of faults, time, and local node behavior.
+
+\lee{no paragraph on no faults in table?}
 
 \paragraph{Omissive Asymmetric Faults.}
 Removing faults already described by the fault model is easy. Recall that in our model faults do not appear in the system specification and only operate on the calendar. Removing a fault from the system requires only setting the number of a particular kind of faults to zero in the maximum fault assumption.
@@ -588,7 +594,7 @@ Adding new kinds of faults requires more work but is still modular. Consider add
 \paragraph{Time-Triggered Messaging.}
 A \emph{time-triggered} distributed system is one in which nodes are independently clocked, but clock constraints (ensured by periodic clock synchronization) allow the model to appear as if it is executing synchronously~\cite{kopetz}.
 
-Changing the model to be time-triggered principally requires making the source, relays, and receivers driven explicitly by the passage of time. As well, a ``receive window'' is defined at which messages from non-faulty nodes should be received. Messages received outside the window are marked as coming from manifest-faulty senders. To implement a time-triggered model, we create three definitions: encoding nondeterministic message delay, and two definitions that are helpers in invariants. The guards in the relays and receivers are modified to latch messages received outside the specified windows as being manifest faults. Additionally, the ASM definition is modified to track the times in the calendar, not just the messages. Two new invariants calendar invariants are introduced, stating that the calendar messages are either empty, or their time-stamps fall within the respective message windows. Then, three invariants classifying faults are relaxed to allow for the possibility of faulty nodes sending manifestly-faulty messages.
+Changing the model to be time-triggered principally requires making the source, relays, and receivers driven explicitly by the passage of time. As well, a ``receive window'' is defined at which messages from non-faulty nodes should be received. Messages received outside the window are marked as coming from manifest-faulty senders. To implement a time-triggered model, we create three definitions: encoding nondeterministic message delay, and two definitions that are helpers in invariants. The guards in the relays and receivers are modified to latch messages received outside the specified windows as being manifest faults. Additionally, the ASM definition is modified to track the times in the calendar, not just the messages. Two new invariants calendar invariants are introduced, stating that the calendar messages are either empty, or their time-stamps fall within the respective message windows. Then, three invariants classifying faults are relaxed to allow for the possibility of faulty nodes sending benign messages.
 
 \paragraph{Mid-Value Selection.}
 Our $\OMH(1)$ model leverages majority vote in order to tolerate faults. Another choice for the fault masking algorithm used here is mid-value selection (or median). This choice is more common in applications involving hardware, signal selection (where signal values cannot be relied on to exactly match even in the absence of faults), or cases where information about congruence is useful. To implement mid-value selection in our model, we allow messages sent to take values in $\mathbb{R}$ and the receiver transition system is modified in two ways. First, a second buffer is introduced which will hold the sorted contents of the main buffer once voting has commenced. Second, a mid-value select function is called on the sorted buffer and the result is stored as the receiver's vote. The only invariants needing modification were the ASM definition (to account for the values stored by the new buffer and the relation between it and the main buffer) and the voting invariant.
@@ -605,13 +611,13 @@ Moreover, we are agnostic about how lemmas are discovered. As techniques like IC
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
 
-The Oral Messages algorithm and its variants have a long history of formal verification, making it a good test-case for comparing and contrasting verification tools~\cite{pvs}. The Oral Messages algorithm was presented in the landmark paper by Lamport, Shostak, and Pease~\cite{om}. OM(1) was subsequently verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement OM(1) is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and OM(1) is specialized to a four-node system. It appears that a general purpose voting algorithm (like Fast MJRTY) is not verified as part of the work. A hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{Lincoln-Rushby}.
+The Oral Messages algorithm and its variants and its variants have a long history of formal verification. \OM{1} was verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement \OM{1} is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and \OM{1} is specialized to a four-node system. It appears that a general purpose voting algorithm (like Fast MJRTY) is not verified as part of the work. A hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{Lincoln-Rushby}.
 
-Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults, specialized for three or four nodes~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. The model is efficient for up to five nodes, but results are not presented beyond that. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of OM(1) as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
+Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults, specialized for three or four nodes~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. The model is efficient for up to five nodes, but results are not presented beyond that. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of \OM{1} as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
 
 % ------------------------------------------------------------
 \section{Conclusions}\label{sec:conclusions}
-This work fits within a larger project, in collaboration with Honeywell Labs, to build an \emph{architectural domain-specific language} (ADSL) for specifying and verifying distributed fault-tolerant systems. The goal of the language is to synthesize both software and/or hardware implementations as well as formal models for verification. Before building such an ADSL, we needed a scalable general formal model to which to compile, leading to the work presented in this paper. We hypothesize that an ADSL will make refactoring even easier, and we can generate invariants or invariant templates useful for verification. Indeed, we have developed a preliminary ADSL that generates C code as well as formal models SRI's Sally~\cite{pdr-kind}, a model-checking descendent to SAL that will be described in future work.\footnote{\url{https://github.com/GaloisInc/atom-sally}}
+This work fits within a larger project, in collaboration with Honeywell Labs, to build an \emph{architectural domain-specific language} (ADSL) for specifying and verifying distributed fault-tolerant systems. The goal of the language is to synthesize both software and/or hardware implementations as well as formal models for verification. Before building such an ADSL, we needed a scalable general formal model to which to compile, leading to the work presented in this paper. We hypothesize that an ADSL will make refactoring even easier, and we can generate invariants or invariant templates useful for verification. Indeed, we have developed a preliminary ADSL that generates C code as well as formal models SRI's Sally~\cite{pdr-kind}, to be described in future work.\footnote{\url{https://github.com/GaloisInc/atom-sally}}
 
 Beyond building an ADSL, another avenue of research is producing a formal proof that a software implementation satisfies the node specification in our framework. While our model of node behavior is low-level, there are gaps. For example, our work is in SAL's language of guarded commands~\cite{SAL} and needs to be either refined or verified to be equivalent to a software implementation's semantics. Another aspect is that behavior related to networking and benign fault diagnosis (e.g., computing a CRC) is are left abstract. In a software implementation, the \texttt{send()} and \texttt{recv()} functions would have to implement these behaviors. Finally, we have modeled messages as integers; but real data may be more complex. A synthesis approach may be suitable and has been used in the past for fault-tolerant clock-synchronization~\cite{ddd}.
 
