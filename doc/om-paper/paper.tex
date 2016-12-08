@@ -408,16 +408,22 @@ In particular, $\OMH(1)$ includes two rounds of broadcast communication, one in 
 
 $\OMH$ is designed to ensure \emph{validity} and \emph{agreement} properties under suitable hypotheses on the number and type of faults in the system. Validity states that if the general is nonfaulty, then every lieutenant outputs the value sent by the general. Agreement states that each lieutenant outputs the same value. More formally, Let $l_i, l_j$ denote the outputs of lieutenants $i, j \in L$, respectively, and let $v$ be the value the general broadcasts:
 \noindent
-\begin{multicols}{2}
-\begin{equation}
-  \tag{Validity}
-    \forall \,i. \quad v \neq \ERR \Rightarrow l_i = v
-\end{equation}\break
-\begin{equation}
-  \tag{Agreement}
-    \forall \,i, j. \quad l_i = l_j
-\end{equation}
-\end{multicols}
+\begin{center}
+\begin{tabular}{l|l}
+\begin{minipage}[t]{0.5\linewidth}
+\begin{equation*}
+%  \tag{Validity}
+    \forall \,i. \quad l_i = v \textnormal{ (Validity)}
+\end{equation*}
+\end{minipage}&
+\begin{minipage}[t]{0.5\linewidth}
+\begin{equation*}
+%  \tag{Agreement}
+    \forall \,i, j. \quad l_i = l_j \textnormal{ (Agreement)}
+\end{equation*}
+\end{minipage}
+\end{tabular}
+\end{center}
 %
 
 %
