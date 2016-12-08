@@ -66,16 +66,24 @@
 \maketitle
 
 \begin{abstract}
-With proof techniques like IC3 and $k$-induction, model-checking scales further
-than ever before.  Still, fault-tolerant distributed systems are particularly
-challenging to model-check given their large state spaces and
-non-determinism. The typical approach to controlling complexity is to construct
-ad-hoc abstractions of faults, message-passing, and behaviors.  However, these
-abstractions come at the price of divorcing the model from its implementation
-and making refactoring difficult. In this work, we present a framework for
-fault-tolerant distributed system verification that combining ideas from the literature including calendar automata,
-symbolic fault injection, and abstract transition systems, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being implementation-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require isolated changes to the model and proofs.
-This work is carried out in SAL model-checker.
+With proof techniques like IC3 and $k$-induction, model-checking
+scales further than ever before.  Still, fault-tolerant distributed
+systems are particularly challenging to model-check given their
+large state spaces and non-determinism. The typical approach to
+controlling complexity is to construct ad-hoc abstractions of faults,
+message-passing, and behaviors.  However, these abstractions come
+at the price of divorcing the model from its implementation and
+making refactoring difficult. In this work, we present a framework
+for fault-tolerant distributed system verification that combining
+ideas from the literature including calendar automata, symbolic
+fault injection, and abstract transition systems, and then we apply
+the framework to model-checking various implementations of the
+Hybrid Oral Messages algorithm that differ in the fault model,
+timing model, and local node behavior. We show that despite being
+implementation-level models, the verifications are scalable and
+modular, insofar as isolated changes to an implementation require
+isolated changes to the model and proofs.  This work is carried out
+in SAL model-checker.
 \end{abstract}
 
 \section{Introduction}
@@ -96,7 +104,7 @@ In Section~\ref{sec:experimental}, we first show that despite being implementati
 
 Finally, in Section~\ref{sec:related} we describe related work, and we make concluding remarks in Section~\ref{sec:conclusions}.
 
-The models and experiments reported herein can be found at \url{https://github.com/GaloisInc/mmc-paper}.
+The models and experiments reported herein can be found online.\footnote{\url{https://github.com/GaloisInc/mmc-paper}}
 
 %% To address this problem, we envision building a domain-specific language (DSL) for specifying and exploring distributed fault-tolerant system implementations. We envision a DSL that generates both code for simulation, testing, and deployment, as well as formal models for verification. That way, the formal models verified and code executed stay in sync, and abstractions are systematically made. We say more about the DSL in Section~\ref{sec:conclusions}.
 
