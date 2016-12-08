@@ -21,11 +21,12 @@
 
 \newcommand{\OM}[1]{\ensuremath{\mathrm{OM}(#1)}\xspace}
 \newcommand{\OMH}{\ensuremath{\mathrm{OMH}}\xspace}
-\newcommand{\Id}{\ensuremath{\mathrm{Id}}\xspace}
-\newcommand{\Msg}{\ensuremath{\mathrm{Msg}}\xspace}
-\newcommand{\ERR}{\ensuremath{\mathrm{ERR}}\xspace}
+\newcommand{\Id}{\ensuremath{\mathit{Id}}\xspace}
+\newcommand{\Msg}{\ensuremath{\mathit{Msg}}\xspace}
+\newcommand{\ERR}{\ensuremath{\mathit{ERR}}\xspace}
 \newcommand{\TO}{\ensuremath{\bm{\mathrm{T}}}\xspace}
 \newcommand{\tld}[1]{#1_{*}\xspace}
+\newcommand{\mfa}{\ensuremath{\mathit{mfa}}\xspace}
 
 %% IEEE
 %% \newtheorem{definition}{Definition}
@@ -73,7 +74,7 @@ ad-hoc abstractions of faults, message-passing, and behaviors.  However, these
 abstractions come at the price of divorcing the model from its implementation
 and making refactoring difficult. In this work, we present a framework for
 fault-tolerant distributed system verification that combining ideas from the literature including calendar automata,
-symbolic fault injection, and abstract transition systems, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being implementation-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require modular changes to the model and proofs.
+symbolic fault injection, and abstract transition systems, and then we apply the framework to model-checking various implementations of the Hybrid Oral Messages algorithm that differ in the fault model, timing model, and local node behavior. We show that despite being implementation-level models, the verifications are scalable and modular, insofar as isolated changes to an implementation require isolated changes to the model and proofs.
 This work is carried out in SAL model-checker.
 \end{abstract}
 
@@ -85,11 +86,11 @@ The verification of this class of systems has usually been at the algorithmic le
 
 There are at least two classes of abstractions that separate protocol-level models of fault-tolerant distributed algorithms from their implementations.  One is to intertwine the environmental model with the system description. For example, the behaviors of nodes are naturally specified as a transition system in which transitions are guarded by the node's fault state. But faults are part of the environment; an implementation does not typically use its own fault status to choose actions! Another class of abstractions is used to simplify models.  For example, message passing might be abstracted with shared state, or a node's local behavior is elided and instead, the output is constrained by a \emph{specification} of the behavior.
 
-In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify several variant implementations of the Byzantine fault-tolerant Hybrid Oral Messages algorithm (\OMH)~\cite{Lincoln-Rushby}. The framework combines ideas from the literature and folklore to build scalable and modular formal models suitable for infinite-state model-checking, and it reduces the need for ad-hoc abstractions and optimizations while maintaining scalability. In Section~\ref{sec:model}, we present the important aspects of the framework, including calendar automata, originally developed by Dutertre and Sorea~\cite{cal}, symbolic fault-injection, and abstract transition systems for verification.
+In this paper, we present a framework for modeling fault-tolerant distributed systems, and use that framework to verify several variant implementations of the Byzantine fault-tolerant Hybrid Oral Messages algorithm (\OMH)~\cite{Lincoln-Rushby}. The framework combines ideas from the literature and folklore to build scalable and modular formal models suitable for infinite-state model-checking, and it reduces the need for ad-hoc abstractions and optimizations. In Section~\ref{sec:model}, we present the important aspects of the framework, including calendar automata, originally developed by Dutertre and Sorea~\cite{cal}, symbolic fault-injection, and abstract transition systems for verification.
 
  %% There are three aspects of the framework: (1) \emph{calendar automata}, originally developed by Dutertre and Sorea~\cite{cal} for specifying real-time systems; (2) symbolic fault injection for decomposing the effects of faults from the system specification, and (3) \emph{abstract state machines observers}, useful for abstracting counterexamples. The framework is suitable for infinite-state model-checking supported by satisfiability modulo theories (SMT).
 
-We use the framework to verify implementation-level models of \OMH in which message passing is explicit, nodes are not enforced to execute strictly synchronously, and voting is explicit. In short, the models corresponds closely with an implementation of the algorithm. In Section~\ref{sec:byz}, we first describe \OMH, then an implementation of it that uses the Boyer-Moore Fast Majority Vote algorithm (Fast~MJRT)~\cite{mjrty}. We then describe a set of modular invariants, such that the invariants only concern specific aspects of the model (e.g., faults, local node behavior, or the passage of time). The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
+We use the framework to verify implementation-level models of $\OMH$ in which message passing is explicit, nodes are not forced to execute strictly synchronously, and voting is explicit. In short, the models corresponds closely with an implementation of the algorithm. In Section~\ref{sec:byz}, we first describe \OMH, then an implementation of it that uses the Boyer-Moore Fast Majority Vote algorithm (Fast~MJRT)~\cite{mjrty}. We then describe a set of modular invariants, such that the invariants only concern specific aspects of the model (e.g., faults, local node behavior, or the passage of time). The verification is interesting in its own right, as it is the first fully parametric (on the number of nodes) model-checked \emph{implementation} of the algorithm.
 
 In Section~\ref{sec:experimental}, we first show that despite being implementation-level, the model is scalable. Developing invariants requires some user guidance, and isolated changes to an implementation should require isolated modifications to the model and proof. To demonstrate this, we modify the \OMH implementation along the dimensions of faults (by adding an omissive-asymetric fault type~\cite{omissive}), time (by making a time-triggered model), and local behavior (by changing the majority vote to a mid-value selection) and show that in each case, the modifications are small and modular.
 
@@ -108,12 +109,12 @@ The models and experiments reported herein can be found at \url{https://github.c
 
 % ------------------------------------------------------------
 \section{Formal Framework}\label{sec:model}
-Here we describe our formal framework specialized for fault-tolerant distributed systems. The framework draws on three principal abstractions: calendar automata, symbolic fault injection, and abstract transition sytems; we describe each below.
+Here we describe our formal framework specialized for fault-tolerant distributed systems. The framework draws on three principal abstractions: calendar automata, symbolic fault injection, and abstract transition systems; we describe each below.
 
 \subsection{Calendar Automata}\label{sec:calendar}
 %% \emph{Timed automata} are specialized formalisms for verifying real-time systems~\cite{alur}. Timed automata assume the existence of continuously-varying real-valued variables, known as \emph{real-time clocks}. Model-checkers for timed-automata are specialized for verifying real-time systems in which the only infinite-valued variables are the real-time clocks.
 
-Real-time system verification in general-purpose model-checkers requires an explicit formalism of real-time progression. Trying to encode real-time clocks directly is difficult; in particular, one must avoid Zeno's paradox in which no progress is made because state transitions simply update real-valued variables by an infinitesimally small amount. To avoid this problem, Dutetre and Sorea developed \emph{calendar automata}~\cite{cal}, which is itself inspired by event calendars used in discrete-event simulation. Rather than encoding ``how much time has passed since the last event'', it encodes ``how far into the future is the next scheduled event'', and a real-valued variable representing the current time is updated to the next event time.
+Real-time system verification in general-purpose model-checkers requires an explicit formalism of real-time progression. Trying to encode real-time clocks directly is difficult; in particular, one must avoid Zeno's paradox in which no progress is made because state transitions simply update real-valued variables by an infinite sequence of decreasing amounts whose sum is finite. To avoid this problem, Dutetre and Sorea developed \emph{calendar automata}~\cite{cal}, which is itself inspired by event calendars used in discrete-event simulation. Rather than encoding ``how much time has passed since the last event'', it encodes ``how far into the future is the next scheduled event'', and a real-valued variable representing the current time is updated to the next event time.
 
 
 %% Indeed, while calendar automata have historically been used for verifying real-time systems, they can be used to verify non real-time systems, too, specified in a discrete-event formulation. We discuss taking a non real-time model and easily transforming it to a real-time time-triggered model in Section~\ref{sec:modular}.
@@ -121,13 +122,13 @@ Real-time system verification in general-purpose model-checkers requires an expl
 %% The calendar automaton avoids the problems of encoding timed automata.
 %% Doing so avoids Zeno updates.
 
-Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. For now, we do not define events; intuitively, an event is a set of state variables (shortly, we will associate events with messages sent in a distributed system). When an event is \emph{enabled}, the transitions over events are enabled; otherwise, the variables stutter and maintain the same value.
+Define a set of \emph{events} $e_0, e_1, \ldots, e_n \in E$. For now, we do not define events; intuitively, an event is a set of state variables (shortly, we will associate events with messages sent in a distributed system). When an event is \emph{enabled}, the transitions over events are enabled; otherwise, the variables stutter (maintain the same value).
 
 An \emph{event calendar} $\{ (e_0, t_0), (e_1, t_1), \ldots, (e_n, t_n) \}$ is a set of ordered pairs $(e_i, t_i)$ called \emph{calendar events} where $e_i \in E$ is an event and $t_i \in \mathbb{R}$ is a \emph{timeout}, the time at which the event is scheduled. We denote element $(e_i, t_i)$ of an event calendar by $c_i$.
 
-Let $cal$ be an event calendar and $c_i, c_j \in c$ be calendar events. Define an ordering on event calendars such that $c_i \leq c_j$ iff $t_i \leq t_j$, and $min(c) = \{ c_i | \forall c_j \in cal, \, c_i \leq c_j  \}$ are the minimum elements of $cal$.
+Let $cal$ be an event calendar and $c_i, c_j \in cal$ be calendar events. Define an ordering on calendar events such that $c_i \leq c_j$ iff $t_i \leq t_j$, and $\min(cal) = \{ c_i | \forall c_j \in cal, \, c_i \leq c_j  \}$ are the minimum elements of $cal$.
 
-Let a transition system $\mathcal{M} = (S, I, \rightarrow)$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that a state $\sigma \in S$ is a total function that maps state variables to values. We distinguish two special state variables in a transition system: (1) $now \in \mathbb{R}$ denotes the current time in the state, and (2) $cal$ is an event calendar.
+Let a transition system $\mathcal{M} = (S, I, \rightarrow)$, be a set of states $S$, a set of initial states $I \subseteq S$, and a transition relation $\rightarrow \subseteq S \times S$. We implicitly assume a set of state variables such that each $\sigma \in S$ is a total function that maps state variables to values. We distinguish two special state variables in a transition system: (1) $now \in \mathbb{R}$ denotes the current time in the state, and (2) $cal$ is an event calendar.
 
 The following laws must hold of a transition system $\mathcal{M}$ implementing a calendar automaton:
 
@@ -136,7 +137,7 @@ The following laws must hold of a transition system $\mathcal{M}$ implementing a
 
 %% \item \label{cal:b} In all states, every calendar event occurs no sooner than the current time: $\forall \sigma \in S$, $(e_i, t_i) \in \sigma(cal)$, $t_i \geq \sigma(now)$.
 
-\item \label{cal:c} In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S$, $\forall (e_i, t_i) \in \sigma(cal)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := min(c)]$.
+\item \label{cal:c} In all states, if the current time is strictly less than every calendar event, then the only enabled transition is a \emph{time progress} update: $\forall \sigma \in S$, $\forall (e_i, t_i) \in \sigma(cal)$, if $\sigma(now) < t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma' = \sigma[now := \min(cal)]$.
 
 \item \label{cal:d} In all states, if the current time equals a timeout, then the only transitions enabled are calendar event updates associated with the timeout: $\forall \sigma \in S$, $\exists (e_i, t_i) \in \sigma(cal)$ such that $\sigma(now) = t_i$, then $\forall \sigma'$ such that $\sigma \rightarrow \sigma'$, $\sigma'(now) = \sigma(now)$, $\sigma'(c_j) = \sigma(c_j)$ for all $c_j \in \sigma(c)$ such that $c_j \neq c_i$, and $c_i \notin \sigma'(c)$.
 
@@ -164,7 +165,7 @@ In a distributed system, it is convenient to distinguish global actions and loca
 
 Again, following Dutetre and Sorea, we associate calendar events with channels in a distributed system~\cite{cal}. Specializing calendars to message passing does not lose generality since all external communication from an individual process can be abstracted as message passing. Furthermore, fault models can be abstracted to act over channels rather than processes~\cite{abstractions}. The calendar introduces real-time constraints on when processes send and receive messages.
 
-Assume processes are indexed from a finite set $\Id \subset \mathbb{N}$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $\Msg$. Given a channel and a timeout, let $send$ be a relation on messages sent on a channel at a given time:
+Assume processes are indexed from a finite set $\Id$. A \emph{channel} from process $i$ to $j$ is an ordered pair $(i,j)$. Define a set of messages $\Msg$. Given a channel and a timeout, let $send$ be a relation on messages sent on a channel at a given time:
 $$send \subseteq \Id \times \Id \times \mathbb{R} \times \Msg$$
 So $send(i, j, t, m)$ holds iff $i$ sends to $j$ message $m$ at time $t$. Likewise, let
 $$recv \subseteq \Id \times \Id \times \mathbb{R} \times \Msg$$
@@ -175,8 +176,6 @@ In the absence of faults, we require that messages received were previously sent
 Then an event calendar for sending and receiving messages on channels is the union of the $send$ and $recv$ relations.
 
 The event of receiving a message initiates a process to update its local transition system and generate additional messages to send. When the process is updating its local transition system, the event calendar is paused. That is, updating an event $recv(i, j, t, m)$ also includes updating $j$'s transition system.
-
-In specifying a system, a \emph{clock} module is synchronously composed (under SAL semantics for synchronous composition~\cite{SAL}) with the system. The clock module updates time to the next calendar event, and stutters otherwise.
 
 %% \subsection{Synchronous Observers and }\label{sec:sync}
 
@@ -252,7 +251,7 @@ The typical approach to modeling faults is to add new state variables to each pr
 \begin{verbatim}
 node:
   health: Fault_Type;
-  faulty(health)      --> send(bad_msg);
+  faulty(health)     --> send(bad_msg);
   non_faulty(health) --> send(good_msg);
 \end{verbatim}
 \normalsize
@@ -262,7 +261,7 @@ node:
 \noindent
 But this approach mixes the specification of a node's behavior with the fault model, an aspect of the environment. Generally, nodes do not contain state variables assigned to their faults, or use their fault-status to determine their behavior!\footnote{There are exceptions; for example, benign faults may be detected by a node itself (e.g., in a built-in-test).} The upshot is that combining faults and node state divorces the specification from its implementation.
 
-A second difficulty with model-checking fault-tolerant systems in general is that modeling faults requires adding state and nondeterminism. The minimum number of additional states that must be introduced may depend non-obviously on other aspects of the fault model, specific protocol, and system size. Such constraints lead to ``meta-model'' reasoning, such as the following, in which Rushby describes the number of data values that a particular protocol model must include to model the full range of Byzantine faults (defined later in this section):
+A second difficulty with model-checking fault-tolerant systems in general is that modeling faults requires adding state and non-determinism. The minimum number of additional states that must be introduced may depend non-obviously on other aspects of the fault model, specific protocol, and system size. Such constraints lead to ``meta-model'' reasoning, such as the following, in which Rushby describes the number of data values that a particular protocol model must include to model the full range of Byzantine faults (defined later in this section):
 
 \begin{quote}
 To achieve the full range of faulty behaviors, it seems that a faulty source should be able to send a \emph{different} incorrect value to each relay, and this requires $n$ different values. It might seem that we need some additional incorrect values so that faulty relays can exhibit their full range of behaviors. It would certainly be safe to introduce additional values for this purpose, but the performance of model checking is very sensitive to the size of the state space, so there is a countervailing argument against introducing additional values. A little thought will show that $\ldots$. Hence, we decide against further extension to the range of values~\cite{Rushby:OM1}.
@@ -270,11 +269,11 @@ To achieve the full range of faulty behaviors, it seems that a faulty source sho
 
 The second problem is the most straightforward to solve. In infinite-state model-checking, we can use either the integers or the reals as the datatype for values. Fault-tolerant voting schemes, such as a majority vote or mid-value selection (see Section~\ref{sec:byz}), require only equality, or a total order, respectively, to be defined for the data.
 
-The solution to the first problem is more involved. Our solution is to introduce what we call a \emph{synchronous kibitzer} that symbolically injects faults into the model. The kibitzer decomposes the state and transitions associated with the fault model from the system itself. For the sake of concreteness in describing the synchronous kibitzer, we introduce a particular fault model, the hybrid fault model of Thambidurai and Park~\cite{hybrid}. This fault model distinguishes Byzantine, symmetric, and manifest faults. It  applies to broadcast systems in which a process is expected to broadcast the same value to multiple receivers. A \emph{Byzantine} (or \emph{arbitrary} fault is one in which a process that is intended to broadcast the same value to other processes may instead broadcast arbitrary values to different receivers (including no value or the correct value). A \emph{symmetric} fault is one in which a process may broadcast the same, but incorrect, value to other processes. Finally, a \emph{manifest} (or \emph{benign} fault is one in which a process's broadcast fault is detectable by the receivers; e.g., by performing a cyclic redundancy check (CRC) or because the value arrives outside of a predetermined window.
+The solution to the first problem is more involved. Our solution is to introduce what we call a \emph{synchronous kibitzer} that symbolically injects faults into the model. The kibitzer decomposes the state and transitions associated with the fault model from the system itself. For the sake of concreteness in describing the synchronous kibitzer, we introduce a particular fault model, the hybrid fault model of Thambidurai and Park~\cite{hybrid}. This fault model distinguishes Byzantine, symmetric, and manifest faults. It  applies to broadcast systems in which a process is expected to broadcast the same value to multiple receivers. A \emph{Byzantine} (or \emph{arbitrary}) fault is one in which a process that is intended to broadcast the same value to other processes may instead broadcast arbitrary values to different receivers (including no value or the correct value). A \emph{symmetric} fault is one in which a process may broadcast the same, but incorrect, value to other processes. Finally, a \emph{manifest} (or \emph{benign}) fault is one in which a process's broadcast fault is detectable by the receivers; e.g., by performing a cyclic redundancy check (CRC) or because the value arrives outside of a predetermined window.
 
 %% In specifying a fault-tolerant system, we must also specify a \emph{maximum fault assumption} (MFA), which specifies the maximum number of each kind of fault that may be present in the system for some system property to hold.
 
-Define a set of fault types $$\textnormal{Faults} = \{none, byz, sym, man\}.$$ As in the previous section, let $\Id \subset \mathbb{N}$ be a finite set of process indices, and let the variable $$faults: \Id \rightarrow \textnormal{Faults}$$ range over possible mappings from processes to faults.
+Define a set of fault types $$\textnormal{Faults} = \{none, byz, sym, man\}.$$ As in the previous section, let $\Id$ be a finite set of process indices, and let the variable $$faults: \Id \rightarrow \textnormal{Faults}$$ range over possible mappings from processes to faults.
 
 The hybrid fault model assumes a broadcast model of communication.
 % Define $rnd: \mathbb{R} \rightarrow \mathbb{N}$ such that if $rnd(t_0) < rnd(t_1)$, then $t_0 < t_1$.
@@ -311,7 +310,7 @@ Byzantine faults are left completely unconstrained.
 
 Thus, faults can be modeled solely in terms of their effects on sending and receiving messages. A node's specification does not have to depend on its fault status directly.
 
-\paragraph{Transient faults.} If the $faults$ mapping is a constant, then faults are permanently but nondeterministically assigned to nodes. However, we can easily model \emph{transient faults} in which nodes are faulty temporarily by making $faults$ a state variable that is updated nondeterministically. Whether we model permanent or transient faults, a \emph{maximum fault assumption} (MFA) describes the maximum number of faults permitted in the system. The $faults$ mapping can be nondeterministically updated during execution while satisfying the MFA using a constraint such as $faults \in \{f \, | \, mfa(f) \}$, where the MFA is defined by $mfa()$.
+If the $faults$ mapping is a constant, then faults are permanently but non-deterministically assigned to nodes. However, we can easily model \emph{transient faults} in which nodes are faulty temporarily by making $faults$ a state variable that is updated non-deterministically. Whether we model permanent or transient faults, a \emph{maximum fault assumption} (MFA) describes the maximum number of faults permitted in the system. The $faults$ mapping can be non-deterministically updated during execution while satisfying the MFA using a constraint such as $faults \in \{f \, | \, \mfa(f) \}$, where the MFA is defined by the function $\mfa$.
 
 
 \subsection{Abstract Transition Systems}\label{sec:abstract}
@@ -388,22 +387,23 @@ $\OMH$ is a recursive algorithm that proceeds in rounds of communication. Here w
 
 %% The goal of the algorithm is for each of the lieutenants to agree on the value sent by $g$ in the presence of a Byzantine faulty general or lieutenants. More precisely, we assume the identity of a sender cannot be spoofed, broadcast communication proceeds in synchronous rounds such that the absence of a message in a round can be detected by the receiver (let $None$ be a constant used when a message is detectably incorrect, including a lack of message), and a Byzantine faulty sender can arbitrary corrupt or not send a message, but there are no other faults in the system.
 
-The algorithm is recursively defined:
+The algorithm is recursively defined for $m \ge 0$:
 
 \begin{itemize}
-\item {\bf $\OMH(0)$}: $g$ broadcasts a value to each lieutenant, and the lieutenants return the value received (or $\ERR$).
+\item {\bf $\OMH(0)$}: $g$ broadcasts a value to each lieutenant and the lieutenants return the value received (or $\ERR$).
 \item {\bf $\OMH(m)$, $m > 0$}:
   \begin{enumerate}
   \item $g$ broadcasts a value to each lieutenant, $l$.
-  \item\label{om:two} Let $l_v$ be the value received by $l \in L$ from $g$. Then for each $l$, execute $\OMH(m-1)$, assigning $l$ to be the general and $L \setminus \{l\}$ to be the lieutenants. $l$ sends $l_v$ or $R$, if $l_v = \ERR$.
+  \item\label{om:two} Let $l_v$ be the value received by $l \in L$ from $g$. Then for each $l$, execute $\OMH(m-1)$, assigning $l$ to be the general and $L \setminus \{l\}$ to be the lieutenants. $l$ sends $l_v$, or $R$ if $l_v = \ERR$.
   \item\label{om:three} For each lieutenant $l \in L$, remove all $\ERR$ values received in Step~\ref{om:two} from executing $\OMH(m-1)$. Compute the majority value over the remaining values, or $V$ if there is no majority. If the majority value is $R$, return $E$.
   \end{enumerate}
 \end{itemize}
 
 \noindent
-In particular, $\OMH(1)$ includes two rounds of broadcast communication, one in which the general broadcasts, and one in which the lieutenants exchange their values.
+In particular, $\OMH(1)$ includes two rounds of broadcast communication: one in which the general broadcasts, and one in which the lieutenants exchange their values.
 
 $\OMH$ is designed to ensure \emph{validity} and \emph{agreement} properties under suitable hypotheses on the number and type of faults in the system. Validity states that if the general is nonfaulty, then every lieutenant outputs the value sent by the general. Agreement states that each lieutenant outputs the same value. More formally, Let $l_i, l_j$ denote the outputs of lieutenants $i, j \in L$, respectively, and let $v$ be the value the general broadcasts:
+\vspace{-0.4cm}
 \noindent
 \begin{center}
 \begin{tabular}{l|l}
@@ -426,7 +426,7 @@ $\OMH$ is designed to ensure \emph{validity} and \emph{agreement} properties und
 %
 %
 
-We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that fault model, agreement and validity hold if $2a+2s+b+1 \geq n$, where $n$ is the total number of nodes, $a$ is the number of Byzantine (or asymmetric) faults, $s$ is the number of symmetric faults, and $b$ is the number of benign faults. Additionally, the number of rounds $m$ must be greater or equal to the number of Byzantine faults, $a$~\cite{Lincoln-Rushby,hybrid}.
+We described a hybrid fault model in Section~\ref{sec:kibitzer}. Under that fault model, validity and agreement hold if $2a+2s+b+1 \geq n$, where $n$ is the total number of nodes, $a$ is the number of Byzantine (or asymmetric) faults, $s$ is the number of symmetric faults, and $b$ is the number of benign faults. Additionally, the number of rounds $m$ must be greater or equal to the number of Byzantine faults, $a$~\cite{Lincoln-Rushby,hybrid}.
 
 
 \subsection{Model Sketch}\label{sec:sketch}
@@ -437,7 +437,7 @@ We follow Rushby~\cite{Rushby:OM1} in ``unrolling'' the communication among lieu
 
 The relays and receivers explicitly send and receive messages and store them in local buffers as needed. In addition, the receivers implement the Fast~MJRY algorithm~\cite{mjrty}.
 
-Our SAL model defines seven transition systems in total: \texttt{clock}, {\texttt{source}, \texttt{relay} (parametrized over an ID), \texttt{receiver} (parametrized over an ID), \texttt{observer}, \texttt{abstractor}, and \texttt{abstract\_monitor}. The first four of these are composed asynchronously, in an intermediate system we label \texttt{system}, and share access to a global calendar consisting of event slots $(\text{message}, \text{time})$, one for each channel in the system. The \texttt{clock} transition system is responsible for updating a global variable \texttt{t} representing time according to the rules in Section~\ref{sec:calendar}.
+Our SAL model defines seven transition systems in total: \texttt{clock}, {\texttt{source}, \texttt{relay} (parametrized over an ID), \texttt{receiver} (parametrized over an ID), \texttt{observer}, \texttt{abstractor}, and \texttt{abstract\_monitor}. The first four of these are composed asynchronously, in an intermediate system we label \texttt{system}, and share access to a global calendar consisting of event slots $(\text{message}, \text{time})$, one for each channel in the system. The \texttt{clock} transition system is responsible for updating a global variable \texttt{t} (called $now$ in Section~\ref{sec:calendar}) representing time according to the rules for calendar automata.
 
 The asynchronous composition of the system relaxes the original specification of the algorithm considerably. For example, in our implementation, a receiver may receive a message from one relay before another relay has received a message from the source. We only require that all relays and receivers have executed before voting. With a general asynchronous model, it is easy to refine it further; for example, we refine it to a time-triggered model in Section~\ref{sec:modular}.
 
