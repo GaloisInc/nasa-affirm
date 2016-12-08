@@ -569,9 +569,9 @@ As a point of comparison, Rushby presents an elegant model of the simpler \OM al
   \hline
                                   & Transition systems\linebreak (7 total)  &Definitions\linebreak (58 total) & Invariants\linebreak (11 total) & Invariant classes\linebreak (5 total) \\
   \hline \hline
-  No Fault Model                  & receivers & 8 modified & 2 modified & ASM, faults \\
-  \hline
-  Omissive Asymmetric Faults       & none      & 4 modified & 2 modified & faults             \\
+  %% No Fault Model                  & receivers & 8 modified & 2 modified & ASM, faults \\
+  %% \hline
+  Omissive Asymmetric Faults       & none      & 1 new, 2 modified & 2 modified & faults             \\
   \hline
   Time-Triggered Messaging        & source, relays, receivers, ASM & 3 new & 2 modified, 3 modified & calendar, faults \\
   \hline
@@ -584,12 +584,10 @@ As a point of comparison, Rushby presents an elegant model of the simpler \OM al
 
 To demonstrate the modularity of the model and verification approach, in this section, we explore variants to the model and report the effort required to implement the modifications and repair the proofs. The results are summarized in Figure~\ref{fig:effort} and sketched below. In the table, for each modification, we report how much of the model must be modified. We report on four aspects of the system: which transition systems making up the full model are modified (as described in Section~\ref{sec:model}), how many definitions have to be added or modified, the number of invariants that have to be added or modified, and which invariant classes (as defined in Section~\ref{sec:invariants}) those lemmas belong to. We modify the implementation along the axes of faults, time, and local node behavior.
 
-\lee{no paragraph on no faults in table?}
-
 \paragraph{Omissive Asymmetric Faults.}
 Removing faults already described by the fault model is easy. Recall that in our model faults do not appear in the system specification and only operate on the calendar. Removing a fault from the system requires only setting the number of a particular kind of faults to zero in the maximum fault assumption.
 
-Adding new kinds of faults requires more work but is still modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a benign fault~\cite{omissive}, to the fault model. Doing so requires modifying none of transition systems. However, we modify four definitions (\texttt{msg()}, characterizing the result on the calendar due to a faulty message; \texttt{omissive\_asymmetric\_fault\_constraint()}, defining the fault, and two functions that characterize the overall maximum fault assumption). Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
+Adding new kinds of faults requires more work but is still modular. Consider adding \emph{omissive asymmetric faults}, a restriction of Byzantine faults in which a broadcaster either sends the correct value or a benign fault~\cite{omissive}, to the fault model. Doing so requires modifying none of transition systems. We add a new uninterpreted function definition for omissive asymmetric faults, then modify the type of faults, and their effect on the calendar. Two invariants, both in the class of invariants cover faults, are extended to cover the cases where a sender is omissive asymmetric.
 
 \paragraph{Time-Triggered Messaging.}
 A \emph{time-triggered} distributed system is one in which nodes are independently clocked, but clock constraints (ensured by periodic clock synchronization) allow the model to appear as if it is executing synchronously~\cite{kopetz}.
@@ -611,7 +609,7 @@ Moreover, we are agnostic about how lemmas are discovered. As techniques like IC
 % ------------------------------------------------------------
 \section{Related Work}\label{sec:related}
 
-The Oral Messages algorithm and its variants and its variants have a long history of formal verification. \OM{1} was verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement \OM{1} is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and \OM{1} is specialized to a four-node system. It appears that a general purpose voting algorithm (like Fast MJRTY) is not verified as part of the work. A hybrid fault-model and modified Oral Messages algorithm was developed by Thambidurai and Park~\cite{hybrid}. Using the PVS interactive theorem-prover~\cite{pvs}, Lincoln and Rushby demonstrate a flaw in Thambidurai and Park's algorithm and present a fix to it~\cite{Lincoln-Rushby}.
+The Oral Messages algorithm and its variants and its variants have a long history of formal verification. \OM{1} was verified in both the PVS and ACL2 interactive theorem-provers~\cite{Young97:IC}. Also in ACL2, an implementation of a circuit design to implement \OM{1} is given~\cite{om-acl2-impl}; the low-level model most closely relates to our level of detail. A refinement-based verification approach is used, and \OM{1} is specialized to a four-node system. It appears that a general purpose voting algorithm (like Fast MJRTY) is not verified as part of the work. It is not clear how difficult it would be to model and verify changes to the implementation in that framework.
 
 Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthesis to partially synthesize a variant of Oral Messages that tolerates transient faults, specialized for three or four nodes~\cite{om1-synth}. Bokor~\emph{et~al.} describe a message-passing model for synchronous distributed algorithms that is particularly amenable to partial-order reduction for explicit-state model-checking~\cite{Bokor2010}. The model is efficient for up to five nodes, but results are not presented beyond that. Very recently, Jovanovi{\'{c}} and Dutertre use a ``flattened'' high-level model of \OM{1} as a benchmark for IC3 augmented with $k$-induction~\cite{pdr-kind}.
 
@@ -619,7 +617,9 @@ Using automated techniques, Gasc{\'{o}}n and Tiwari use SAT-based bounded synthe
 \section{Conclusions}\label{sec:conclusions}
 This work fits within a larger project, in collaboration with Honeywell Labs, to build an \emph{architectural domain-specific language} (ADSL) for specifying and verifying distributed fault-tolerant systems. The goal of the language is to synthesize both software and/or hardware implementations as well as formal models for verification. Before building such an ADSL, we needed a scalable general formal model to which to compile, leading to the work presented in this paper. We hypothesize that an ADSL will make refactoring even easier, and we can generate invariants or invariant templates useful for verification. Indeed, we have developed a preliminary ADSL that generates C code as well as formal models SRI's Sally~\cite{pdr-kind}, to be described in future work.\footnote{\url{https://github.com/GaloisInc/atom-sally}}
 
-Beyond building an ADSL, another avenue of research is producing a formal proof that a software implementation satisfies the node specification in our framework. While our model of node behavior is low-level, there are gaps. For example, our work is in SAL's language of guarded commands~\cite{SAL} and needs to be either refined or verified to be equivalent to a software implementation's semantics. Another aspect is that behavior related to networking and benign fault diagnosis (e.g., computing a CRC) is are left abstract. In a software implementation, the \texttt{send()} and \texttt{recv()} functions would have to implement these behaviors. Finally, we have modeled messages as integers; but real data may be more complex. A synthesis approach may be suitable and has been used in the past for fault-tolerant clock-synchronization~\cite{ddd}.
+Beyond building an ADSL, another avenue of research is producing a formal proof that a software implementation satisfies the node specification in our framework. While our model of node behavior is low-level, there are gaps. For example, our work is in SAL's language of guarded commands~\cite{SAL} and needs to be either refined or verified to be equivalent to a software implementation's semantics. Another aspect is that behavior related to networking and benign fault diagnosis (e.g., computing a CRC) is are left abstract. In a software implementation, the $send$ and $recv$ functions would have to implement these behaviors.
+
+ %% A synthesis approach may be suitable and has been used in the past for fault-tolerant clock-synchronization~\cite{ddd}.
 
 
 
