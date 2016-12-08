@@ -25,6 +25,8 @@
 \newcommand{\Msg}{\ensuremath{\mathrm{Msg}}}
 \newcommand{\ERR}{\ensuremath{\mathrm{ERR}}}
 \newcommand{\TO}{\ensuremath{\bm{\mathrm{T}}}}
+%\newcommand{\tld}[1]{\overset{\sim}{#1}}
+\newcommand{\tld}[1]{#1_{*}}
 
 %% IEEE
 %% \newtheorem{definition}{Definition}
@@ -312,35 +314,41 @@ Thus, faults can be modeled solely in terms of their effects on sending and rece
 \paragraph{Transient faults.} If the $faults$ mapping is a constant, then faults are permanently but nondeterministically assigned to nodes. However, we can easily model \emph{transient faults} in which nodes are faulty temporarily by making $faults$ a state variable that is updated nondeterministically. Whether we model permanent or transient faults, a \emph{maximum fault assumption} (MFA) describes the maximum number of faults permitted in the system. The $faults$ mapping can be nondeterministically updated during execution while satisfying the MFA using a constraint such as $faults \in \{f \, | \, mfa(f) \}$, where the MFA is defined by $mfa()$.
 
 
-\subsection{Proof by Abstraction}\label{sec:abstract}\label{sec:asms}
-\lee{These are really observers. Let's call them abstract state machine observers and add a bit of the synchronous observers text here. Also, cite disjunctive invariants paper?}
+\subsection{Abstract Transition Systems}\label{sec:abstract}
 
-In model-checking, counterexamples to properties are traces of states. A state is an assignment to each of the system variables and the counterexample traces we examine (see Section~\ref{sec:experimental}) can contain hundreds of system  variables. In practice however, the essence of a counterexample depends on a small subset of these. The user has to manually separate the state variables that matter from those that do not for a specific property. Moreover, It is not enough to prevent variables that stutter from displaying since some state variables might be updated without affecting the property. The problem is particularly pertinent when formal models have sufficient detail for implementation synthesis, as is the goal in our work.
+In order to scale verification of models up to more than a few nodes, and to avoid having to increase the depth of induction (which tends to be very expensive) during verification, we have followed Rushby's  application of abstract transition systems (and disjunctive invariants) \cite{Rushby00:CAV,timed-systems}. In this context, an abstract transition system, relative to a given transition system $\mathcal{M} = (S, I, \rightarrow)$, is a set of state predicates $A_1, \ldots, A_n$ over $S$ and a transition system $\tld{\mathcal{M}} = (\tld{S}, \tld{I}, \leadsto)$ such that:
+
+\begin{enumerate}
+    \item $\tld{S} = \{a_1, \ldots, a_n\}$ is a set of ``abstract states'' which correspond one-to-one with the state predicates $A_i$.
+    \item $\forall s \in I, \, \exists i : \, a_i \in \tld{I} \wedge A_i(s)$
+    \item $\forall a_i \in \tld{S} \, \forall \sigma, \sigma' : \, A_i(\sigma) \wedge \sigma \rightarrow \sigma' \, \implies \, A_{k_1}(\sigma') \vee \ldots \vee A_{k_m}(\sigma')$ where $\{a_{k_1}, \ldots, a_{k_m}\}$ are the abstract states to which $\tld{\mathcal{M}}$ may transition from $a_i$.
+\end{enumerate}
+
+For verification purposes, it is important to note that if $\mathcal{M}$ and $\tld{\mathcal{M}}$ satisfy the requirements above, then $A_1 \vee \ldots \vee A_n$ is an inductive invariant of $\mathcal{M}$. We may use such an invariant freely as a powerful assumption in the proof of other invariants (see Section~\ref{sec:invariants}).
+
+The use of abstract transition systems not only allows us to scale proofs farther, but also to improve traceability and debugging while developing a model. In models like the ones described in Section~\ref{sec:modular} where there are on the order of 100 state variables and counter-example traces could be 30 steps long, the designer can be easily lost trying to identify the essence. In such cases, the values of the abstract predicates can serve to focus the designer's attention on one particular mode of the system where the counter example is taking place.
+
+% In model-checking, counterexamples to properties are traces of states. A state is an assignment to each of the system variables and the counterexample traces we examine (see Section~\ref{sec:experimental}) can contain hundreds of system  variables. In practice however, the essence of a counterexample depends on a small subset of these. The user has to manually separate the state variables that matter from those that do not for a specific property. The problem is particularly pertinent when formal models have sufficient detail for implementation synthesis, as is the goal in our work.
 
 %% Systems are usually designed in modes such that predicates on state variables are parameterized on which mode the system is in. The transition between modes implements a finite state-machine. The modes and the state-machine are usually implicit, but a property violation usually requires an unexpected mode transition. Abstracting counterexample traces over all of the state variables by traces over the modes helps to identify why a property fails quickly.
 
-But the relationship between many of the state variables often has an intuitive structure, one familiar to the designer, that can be characterized by an auxiliary state machine imposed over it. The state space of this auxiliary machine comprises discrete modes or configurations of the real system. Each mode captures a relation on a subset of the state variables, as well as the set of possible modes that follow.
-
-\cite{timed-systems}
-\cite{Rushby00:CAV}
+% But the relationship between many of the state variables often has an intuitive structure, one familiar to the designer, that can be characterized by an auxiliary state machine imposed over it. The state space of this auxiliary machine comprises discrete modes or configurations of the real system. Each mode captures a relation on a subset of the state variables, as well as the set of possible modes that follow.
 
 % This idea is an implementation of abstract state machines (ASMs). ASMs are a generalization of finite state machines originally developed by Gurevich to generalize state machines to operate over arbitrary data structures~\cite{asm}. In our modeling framework we take the ASM idea and turn it into both and auxiliary state machine and an observer of the real system as follows.
 
 % In our context, we require only a restricted form of ASMs known as a \emph{sequential small-step ASM}:
 
-\begin{definition}[Abstract state machine observer (ASMO)]
+% \begin{definition}[Abstract state machine observer (ASMO)]
+% 
+% Let $\mathcal{M} = (S, I, \rightarrow)$ be a transition system and let $B \subseteq 2^S$ be a set of predicates over $S$. Then $\mathcal{M}$ is an ASM iff the transition relation $\rightarrow$ is of the form
+% $$\textnormal{if } b_0(s_0) \textnormal{ then } s'_0 \textnormal{ else if } b_1(s_1) \textnormal{ then } s'_1 \ldots \textnormal{ else } b_n(s_n) \textnormal{ then } s'_n$$
+% \noindent
+% where $b_0, b_1, \ldots, b_n$ are arbitrary Boolean combinations of the predicates in $B$.
+% \end{definition}
 
-Let $\mathcal{M} = (S, I, \rightarrow)$ be a transition system and let $B \subseteq 2^S$ be a set of predicates over $S$. Then $\mathcal{M}$ is an ASM iff the transition relation $\rightarrow$ is of the form
-$$\textnormal{if } b_0(s_0) \textnormal{ then } s'_0 \textnormal{ else if } b_1(s_1) \textnormal{ then } s'_1 \ldots \textnormal{ else } b_n(s_n) \textnormal{ then } s'_n$$
-\noindent
-where $b_0, b_1, \ldots, b_n$ are arbitrary Boolean combinations of the predicates in $B$.
-\end{definition}
-
-\ben{I'm confused by this definition, but I haven't looked at the reference, so maybe it would be clear if I did. My intuitive notion of ASM involves a set of predicates B which *cover* the reachable states and a transition relation over B that abstracts the one over S.}
-
-Our use of ASMs to improve traceability is even more restrictive. We construct an ASM $\mathcal{M}$ that is synchronously composed with the system specification $\mathcal{S}$. Each state of the ASM represents a ``configurations'' of $S$ and is associated with some predicate over the states of $\mathcal{S}$.
 
 % \begin{example}
+
 % Consider a simple distributed system involving 3 processors: $S$, $L_1$, and $L_2$. The purpose of the system is for $S$ to broadcast a message to $L_1$ and $L_2$ after which they perform a computation on the message and update their local state with the result. One might model this system as a transition system whose state is the product of the local processor states along with the state of the environment and any globally important phenomena such as time.
 % 
 % \begin{figure}
@@ -363,7 +371,7 @@ Our use of ASMs to improve traceability is even more restrictive. We construct a
 % \caption{Simple message passing system}
 % \end{figure}
 
-Intuitively, there are subsets of the overall state space which are important to understanding the evolution of such a system. For example, let $A_1$ denote the subset of states in which the processor $S$ has not sent a message, let $A_2$ be the subset in which $S$ has broadcast a message, and let $A_3$ be the subset in which $L_1$ and $L_2$ have each received and processed the message. The union $A_1 \cup A_2 \cup A_3$ covers the set of reachable states of the system and defines an ASM that is useful for reasoning about its dynamics and understanding counter-example traces.
+% Intuitively, there are subsets of the overall state space which are important to understanding the evolution of such a system. For example, let $A_1$ denote the subset of states in which the processor $S$ has not sent a message, let $A_2$ be the subset in which $S$ has broadcast a message, and let $A_3$ be the subset in which $L_1$ and $L_2$ have each received and processed the message. The union $A_1 \cup A_2 \cup A_3$ covers the set of reachable states of the system and defines an ASM that is useful for reasoning about its dynamics and understanding counter-example traces.
 
 % \end{example}
 
