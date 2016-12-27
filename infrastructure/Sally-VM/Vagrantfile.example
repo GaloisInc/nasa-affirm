@@ -1,15 +1,25 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+#
+# EDIT the following configuration parameters as needed
+#
+host_synced_folder  = "/home/alice/project"
+guest_synced_folder = "/home/vagrant/project"
+guest_memory        = "1024"  # MB
+
+
+#
+# You should not need to EDIT below here.
+#
 Vagrant.configure(2) do |config|
   config.vm.box = "debian/contrib-jessie64"
   config.vm.provider "virtualbox" do |vb|
      # Customize the amount of memory on the VM:
-     vb.memory = "1024"
+     vb.memory = guest_memory
   end
 
-  # EDIT THIS LINE to share your project directory with the VM
-  config.vm.synced_folder "/home/alice/project", "/home/vagrant/project"
+  config.vm.synced_folder host_synced_folder, guest_synced_folder
 
   # Support caching debian packages on the host
   cache_dir = local_cache(config.vm.box)
