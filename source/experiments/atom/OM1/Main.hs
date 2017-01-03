@@ -11,7 +11,8 @@ main = do
   compileOM1ToC
 
   putStrLn "Compiling OM1 to Sally... (om1.mcmt)"
-  compileToSally "om1" defaultCfg "om1.mcmt" om1 Nothing
+  let sallyCfg = defaultCfg { cfgMFA = hybridMFA }
+  compileToSally "om1" sallyCfg "om1.mcmt" om1 Nothing
 
   putStrLn "Done."
 
