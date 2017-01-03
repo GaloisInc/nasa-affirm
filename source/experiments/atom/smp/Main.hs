@@ -10,7 +10,8 @@ main = do
   putStrLn "Compiling SMP to C... (smp.{c,h})"
   compileSMPToC
   putStrLn "Compiling SMP to Sally... (smp.mcmt)"
-  compileToSally "smp" defaultCfg "smp.mcmt" smp Nothing
+  let sallyCfg = defaultCfg { cfgMFA = hybridMFA }
+  compileToSally "smp" sallyCfg "smp.mcmt" smp Nothing
   putStrLn "Done."
 
 

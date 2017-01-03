@@ -2,3 +2,6 @@
 dist
 .cabal.sandbox.config
 smp
+smp.c
+smp.h
+smp.mcmt
