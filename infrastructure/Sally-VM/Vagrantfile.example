@@ -38,7 +38,6 @@ sudo apt-get update
 # Basic dev tools
 sudo apt-get install -y                                     \\
     vim-nox tmux python git zsh curl wget silversearcher-ag \\
-    ghc cabal-install                                       \\
     build-essential autoconf libtool pkg-config
 
 # Install Yices2 & Sally dependencies
