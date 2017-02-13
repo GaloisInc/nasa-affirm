@@ -70,7 +70,8 @@ producerPeriod = 2
 producer :: ChanInput  -- ^ channel input that producer will put messages on
          -> Atom ()
 producer c = period producerPeriod . atom "producer" $ do
-  count <- var "count" zero    -- declare a local variable
+  let zero = 0 :: Int64         -- fix the type of variable "count"
+  count <- var "count" zero     -- declare a local variable
   probe "producer.count" (value count)
   writeChannel c (value count)  -- put 'count' on the channel
   incr count                    -- increment count (order w/ writeChannel
@@ -87,6 +88,7 @@ consumer :: ChanOutput  -- ^ channel output to listen to
          -> Atom ()
 consumer c = period consumerPeriod . atom "consumer" $ do
   -- declare some local variables that are referenced by the sub-atoms below
+  let zero = 0 :: Int64
   evenCount <- var "evenCount" zero
   probe "consumer.evens" (value evenCount)
   thirdEvenCount <- var "thirdEvenCount" zero
@@ -94,38 +96,27 @@ consumer c = period consumerPeriod . atom "consumer" $ do
   cycleCount <- var "cycleCount" zero
   probe "consumer.cycles" (value cycleCount)
 
-  let zeroC  = Const zero
-  let twoC   = Const two
-  let threeC = Const three
-
   -- this sub-atom functions as a transition guarded by listening to the
   -- channel
   atom "listen_for_evens" $ do
     --
     -- Guard only on the channel containing a message
     cond $ fullChannel c
-    let m = readChannel c
+    let m = readChannel c :: E Int64  -- fix the type of the message
         v = value evenCount
-    evenCount <== mux ((mod_ m twoC) ==. zeroC) (1 + v) v
-    -- evenCount <== mux (v ==. zeroC) m twoC  -- ok w/ sally
+    evenCount <== mux (mod_ m 2 ==. 0) (1 + v) v
     incr cycleCount
 
   -- this sub-atom is guarded on an expression of the local variable
   -- 'evenCount'
   atom "observe_third_evens" $ do
-    cond $ (mod_ (value evenCount) threeC) ==. zeroC
-    -- cond $ (value evenCount) ==. threeC  -- ok w/ sally
+    cond $ mod_ (value evenCount) 3 ==. 0
     incr thirdEvenCount
 
   printAllProbes
 
 
 -- Utility Stuff -------------------------------------------------------
-
-zero, two, three :: Int64
-zero   = 0
-two    = 2
-three  = 3
 
 printAllProbes :: Atom ()
 printAllProbes = mapM_ printProbe =<< probes
