@@ -98,6 +98,7 @@ recv nm c = period recvPeriod . atom nm $ do
   cond $ fullChannel c    -- execute only if channel 'c' has new message
   vote <== readChannel c  -- read message and assign to 'vote'
   done <== Const True
+  consumeChannel c
 
   printAllProbes
 
